@@ -1,123 +1,234 @@
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
+import { fetchAPI } from "@/services/api";
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
-import { Linking, Platform, ScrollView, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
 export default function LocationScreen() {
-  const address = "Rua das Flores, 123, Bairro Jardim, Belo Horizonte - MG";
-  const mapUrl = Platform.select({
-    ios: `maps:0,0?q=${address}`,
-    android: `geo:0,0?q=${address}`,
-  });
+  const [loading, setLoading] = useState(true);
+  const [config, setConfig] = useState<any>(null);
 
-  const whatsappNumber = "5531999999999"; // Exemplo
+  useEffect(() => {
+    loadConfig();
+  }, []);
+
+  const loadConfig = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchAPI('/config/info');
+      setConfig(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const openMap = () => {
+    if (!config) return;
+    const mapUrl = Platform.select({
+      ios: `maps:0,0?q=${config.CONTACT_INFO.address}`,
+      android: `geo:0,0?q=${config.CONTACT_INFO.address}`,
+    });
     Linking.openURL(mapUrl!);
   };
 
   const openWhatsApp = () => {
-    Linking.openURL(`https://wa.me/${whatsappNumber}?text=Olá, gostaria de saber mais sobre o Salão.`);
+    if (!config) return;
+    Linking.openURL(`https://wa.me/${config.CONTACT_INFO.whatsappNumber}?text=${encodeURIComponent(config.CONTACT_INFO.whatsappMessage)}`);
   };
 
-  return (
-    <ThemedView className="flex-1 bg-gray-50">
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+  if (loading || !config) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color="#DB2777" />
+      </View>
+    );
+  }
 
-        {/* 👇 Cabeçalho Animado (Igual às outras telas) */}
-        <Animated.View
-          entering={FadeInDown.duration(800).springify()}
-          className="bg-pink-500 p-6 pt-12 rounded-b-3xl shadow-md mb-6"
-        >
-          <ThemedText className="text-white opacity-80 mb-1 font-medium">Venha nos visitar</ThemedText>
-          <ThemedText className="text-3xl font-bold text-white">Onde Estamos</ThemedText>
-          <ThemedText className="text-pink-100 mt-2">Um ambiente pensado para você</ThemedText>
+  const { CONTACT_INFO, BUSINESS_HOURS } = config;
+
+  return (
+    <View style={styles.container}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+
+        {/* Seção 1: Endereço */}
+        <Animated.View entering={FadeInDown.delay(200).duration(800)} style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.iconWrapper}>
+              <Ionicons name="location-outline" size={20} color="#DB2777" />
+            </View>
+            <Text style={styles.cardLabel}>LOCALIZAÇÃO</Text>
+          </View>
+
+          <Text style={styles.addressText}>{CONTACT_INFO.address}</Text>
+
+          <TouchableOpacity onPress={openMap} style={styles.outlineButton}>
+            <Ionicons name="map-outline" size={16} color="#333" />
+            <Text style={styles.outlineButtonText}>ABRIR NO MAPA</Text>
+          </TouchableOpacity>
         </Animated.View>
 
-        <View className="px-4">
-
-          {/* 👇 Card de Endereço (Clicável) */}
-          <Animated.View
-            entering={FadeInDown.delay(200).duration(800)}
-            className="mb-4 rounded-2xl bg-white p-5 shadow-sm border border-gray-100"
-          >
-            <View className="flex-row items-center mb-4">
-              <View className="h-10 w-10 items-center justify-center rounded-full bg-pink-100 mr-3">
-                <Ionicons name="location" size={20} color="#ec4899" />
-              </View>
-              <ThemedText type="subtitle">Endereço</ThemedText>
+        {/* Seção 2: Horários */}
+        <Animated.View entering={FadeInDown.delay(400).duration(800)} style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.iconWrapper}>
+              <Ionicons name="time-outline" size={20} color="#DB2777" />
             </View>
+            <Text style={styles.cardLabel}>HORÁRIOS</Text>
+          </View>
 
-            <ThemedText className="text-gray-600 text-base leading-6 mb-4">
-              {address}
-            </ThemedText>
+          <View style={styles.row}>
+            <Text style={styles.dayText}>Segunda a Sexta</Text>
+            <Text style={styles.timeText}>{BUSINESS_HOURS.weekdays.open} — {BUSINESS_HOURS.weekdays.close}</Text>
+          </View>
+          <View style={[styles.row, styles.borderTop]}>
+            <Text style={styles.dayText}>Sábado</Text>
+            <Text style={styles.timeText}>{BUSINESS_HOURS.saturday.open} — {BUSINESS_HOURS.saturday.close}</Text>
+          </View>
+          <View style={[styles.row, styles.borderTop]}>
+            <Text style={styles.dayText}>Domingo</Text>
+            <Text style={styles.closedText}>{BUSINESS_HOURS.sunday.open ? `${BUSINESS_HOURS.sunday.open} — ${BUSINESS_HOURS.sunday.close}` : "FECHADO"}</Text>
+          </View>
+        </Animated.View>
 
-            <TouchableOpacity
-              onPress={openMap}
-              className="flex-row items-center justify-center rounded-xl bg-gray-50 py-3 border border-gray-200 active:bg-gray-100"
-            >
-              <Ionicons name="map-outline" size={18} color="#ec4899" style={{ marginRight: 8 }} />
-              <ThemedText type="defaultSemiBold" className="text-pink-600">Abrir no Mapa</ThemedText>
-            </TouchableOpacity>
-          </Animated.View>
-
-          {/* 👇 Card de Horários */}
-          <Animated.View
-            entering={FadeInDown.delay(400).duration(800)}
-            className="mb-4 rounded-2xl bg-white p-5 shadow-sm border border-gray-100"
-          >
-            <View className="flex-row items-center mb-4">
-              <View className="h-10 w-10 items-center justify-center rounded-full bg-pink-100 mr-3">
-                <Ionicons name="time" size={20} color="#ec4899" />
-              </View>
-              <ThemedText type="subtitle">Horário de Funcionamento</ThemedText>
+        {/* Seção 3: Contato */}
+        <Animated.View entering={FadeInDown.delay(600).duration(800)} style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.iconWrapper}>
+              <Ionicons name="logo-whatsapp" size={20} color="#10B981" />
             </View>
+            <Text style={styles.cardLabel}>CONTATO DIRETO</Text>
+          </View>
 
-            {/* Lista visual de horários */}
-            <View className="space-y-3">
-              <View className="flex-row justify-between border-b border-gray-50 pb-2">
-                <ThemedText className="text-gray-500">Segunda a Sexta</ThemedText>
-                <ThemedText type="defaultSemiBold">09:00 - 20:00</ThemedText>
-              </View>
-              <View className="flex-row justify-between border-b border-gray-50 pb-2">
-                <ThemedText className="text-gray-500">Sábado</ThemedText>
-                <ThemedText type="defaultSemiBold">09:00 - 18:00</ThemedText>
-              </View>
-              <View className="flex-row justify-between">
-                <ThemedText className="text-gray-500">Domingo</ThemedText>
-                <ThemedText className="text-red-400">Fechado</ThemedText>
-              </View>
-            </View>
-          </Animated.View>
+          <Text style={styles.descriptionText}>
+            Dúvidas sobre procedimentos ou horários especiais? Nossa equipe está pronta para te atender.
+          </Text>
 
-          {/* 👇 Card de Contato (WhatsApp) */}
-          <Animated.View
-            entering={FadeInDown.delay(600).duration(800)}
-            className="rounded-2xl bg-white p-5 shadow-sm border border-gray-100"
-          >
-            <View className="flex-row items-center mb-4">
-              <View className="h-10 w-10 items-center justify-center rounded-full bg-green-100 mr-3">
-                <Ionicons name="logo-whatsapp" size={20} color="#16a34a" />
-              </View>
-              <ThemedText type="subtitle">Fale Conosco</ThemedText>
-            </View>
+          <TouchableOpacity onPress={openWhatsApp} style={styles.primaryButton}>
+            <Text style={styles.primaryButtonText}>INICIAR CONVERSA</Text>
+          </TouchableOpacity>
+        </Animated.View>
 
-            <ThemedText className="text-gray-500 mb-4">
-              Tem alguma dúvida ou preferência especial? Mande uma mensagem!
-            </ThemedText>
-
-            <TouchableOpacity
-              onPress={openWhatsApp}
-              className="flex-row items-center justify-center rounded-xl bg-green-500 py-3 shadow-sm active:bg-green-600"
-            >
-              <ThemedText type="defaultSemiBold" className="text-white">Chamar no WhatsApp</ThemedText>
-            </TouchableOpacity>
-          </Animated.View>
-
-        </View>
       </ScrollView>
-    </ThemedView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#FAFAFA',
+  },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  scrollContent: {
+    padding: 25,
+    paddingTop: 10,
+    paddingBottom: 40,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 4,
+    padding: 24,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  iconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FDF2F8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  cardLabel: {
+    fontSize: 10,
+    letterSpacing: 2,
+    fontWeight: '800',
+    color: '#999',
+  },
+  addressText: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 24,
+    marginBottom: 20,
+    fontWeight: '300',
+  },
+  descriptionText: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
+  borderTop: {
+    borderTopWidth: 1,
+    borderTopColor: '#F9FAFB',
+  },
+  dayText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  timeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
+  closedText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#F87171',
+  },
+  outlineButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 48,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    gap: 8,
+  },
+  outlineButtonText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+    color: '#1A1A1A',
+  },
+  primaryButton: {
+    backgroundColor: '#1A1A1A',
+    height: 50,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+  },
+});

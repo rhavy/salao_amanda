@@ -1,9 +1,5 @@
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { auth, db } from "@/config/firebase";
+import { fetchAPI } from "@/services/api";
 import { Link, useRouter } from "expo-router";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -11,14 +7,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
-  View,
+  View
 } from "react-native";
 import MaskInput, { Masks } from 'react-native-mask-input';
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
-import { toast } from 'sonner-native';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -29,108 +26,102 @@ export default function RegisterScreen() {
   const [phone, setPhone] = useState("");
   const [cpf, setCpf] = useState("");
   const [birthDate, setBirthDate] = useState("");
-  const [gender, setGender] = useState<"Feminino" | "Masculino" | "Outro" | "">(""); // Novo estado para Sexo
+  const [gender, setGender] = useState<"Feminino" | "Masculino" | "Outro" | "">("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
-    // Validação incluindo o gênero
-    if (!name || !email || !phone || !cpf || !birthDate || !password || !gender) {
-      toast.error("Campos incompletos", { description: "Por favor, preencha todas as informações, incluindo o sexo." });
+    if (!name || !email || !password) {
+      alert("Por favor, preencha pelo menos nome, e-mail e senha.");
       return;
     }
 
-    setLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
-      const user = userCredential.user;
-
-      await updateProfile(user, { displayName: name });
-
-      // Salvando no Firestore com o novo campo 'gender'
-      await setDoc(doc(db, "users", user.uid), {
-        uid: user.uid,
-        name: name,
-        email: email.toLowerCase().trim(),
-        phone: phone,
-        cpf: cpf,
-        birthDate: birthDate,
-        gender: gender, // Salvo aqui
-        avatar: "",
-        appointmentsCount: 0,
-        totalSpent: 0,
-        memberSince: new Date().toISOString(),
-        role: "client",
-        active: true
+      setLoading(true);
+      const response = await fetchAPI('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ name, email, password, gender, phone, cpf, birthDate }),
       });
 
-      toast.success("Bem-vinda(o)!", { description: "Sua conta foi criada com sucesso!" });
-      router.replace("/(tabs)");
-
+      alert(response.message || "Conta criada com sucesso!");
+      router.replace("/login");
     } catch (error: any) {
-      let msg = "Erro ao cadastrar.";
-      if (error.code === 'auth/email-already-in-use') msg = "E-mail já cadastrado.";
-      toast.error("Erro", { description: msg });
+      alert(error.message || "Erro ao criar conta");
     } finally {
       setLoading(false);
     }
   };
 
-  const InputLabel = ({ label }: { label: string }) => (
-    <Text className="text-gray-400 font-bold mb-2 ml-1 uppercase text-[10px] tracking-widest">{label}</Text>
-  );
-
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <ThemedView className="flex-1 bg-white">
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1">
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 24, paddingTop: 60 }}>
+      <View style={styles.container}>
+        {/* Detalhe Decorativo */}
+        <View style={styles.circleDecorator} />
 
-            <Animated.View entering={FadeInDown.duration(1000).springify()} className="mb-10">
-              <ThemedText type="title" className="text-4xl font-bold text-pink-600">Criar Conta</ThemedText>
-              <ThemedText className="text-gray-400 mt-2 text-lg">Seja bem-vinda ao Salão Amanda</ThemedText>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
+        >
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
+            {/* Cabeçalho Minimalista */}
+            <Animated.View entering={FadeInDown.duration(1000).springify()} style={styles.header}>
+              <Text style={styles.brandName}>AMANDA</Text>
+              <View style={styles.divider} />
+              <Text style={styles.brandSubtitle}>CRIAR CONTA</Text>
             </Animated.View>
 
-            <View className="space-y-4">
-              {/* Bloco 1: Identificação */}
-              <Animated.View entering={FadeInRight.delay(300)}>
-                <InputLabel label="Dados Pessoais" />
-                <MaskInput
-                  className="h-14 w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 mb-4 text-base text-gray-800"
+            <View style={styles.form}>
+              {/* Seção 1 */}
+              <Animated.View entering={FadeInRight.delay(300)} style={styles.section}>
+                <Text style={styles.sectionLabel}>DADOS PESSOAIS</Text>
+
+                <TextInput
+                  style={styles.input}
                   placeholder="Nome Completo"
+                  placeholderTextColor="#A0A0A0"
                   value={name}
                   onChangeText={setName}
                 />
+
                 <MaskInput
-                  className="h-14 w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 mb-4 text-base text-gray-800"
+                  style={styles.input}
                   placeholder="CPF"
+                  placeholderTextColor="#A0A0A0"
                   keyboardType="numeric"
                   value={cpf}
                   onChangeText={setCpf}
                   mask={Masks.BRL_CPF}
                 />
+
                 <MaskInput
-                  className="h-14 w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 mb-4 text-base text-gray-800"
-                  placeholder="Data de Nascimento (DD/MM/AAAA)"
+                  style={styles.input}
+                  placeholder="Data de Nascimento"
+                  placeholderTextColor="#A0A0A0"
                   keyboardType="numeric"
                   value={birthDate}
                   onChangeText={setBirthDate}
                   mask={Masks.DATE_DDMMYYYY}
                 />
 
-                {/* --- SELETOR DE SEXO --- */}
-                <InputLabel label="Sexo" />
-                <View className="flex-row justify-between mb-4">
+                {/* Seletor de Sexo Estilizado */}
+                <Text style={styles.innerLabel}>SEXO</Text>
+                <View style={styles.genderContainer}>
                   {["Feminino", "Masculino", "Outro"].map((option) => (
                     <TouchableOpacity
                       key={option}
                       onPress={() => setGender(option as any)}
-                      className={`flex-1 h-12 items-center justify-center rounded-xl mx-1 border ${gender === option
-                          ? "bg-pink-500 border-pink-500"
-                          : "bg-gray-50 border-gray-100"
-                        }`}
+                      style={[
+                        styles.genderButton,
+                        gender === option && styles.genderButtonActive
+                      ]}
                     >
-                      <Text className={`font-bold ${gender === option ? "text-white" : "text-gray-400"}`}>
+                      <Text style={[
+                        styles.genderButtonText,
+                        gender === option && styles.genderButtonTextActive
+                      ]}>
                         {option}
                       </Text>
                     </TouchableOpacity>
@@ -138,56 +129,197 @@ export default function RegisterScreen() {
                 </View>
               </Animated.View>
 
-              {/* Bloco 2: Contato e Segurança */}
-              <Animated.View entering={FadeInRight.delay(500)}>
-                <InputLabel label="Contato e Segurança" />
+              {/* Seção 2 */}
+              <Animated.View entering={FadeInRight.delay(500)} style={styles.section}>
+                <Text style={styles.sectionLabel}>CONTATO E SEGURANÇA</Text>
+
                 <MaskInput
-                  className="h-14 w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 mb-4 text-base text-gray-800"
+                  style={styles.input}
                   placeholder="WhatsApp"
+                  placeholderTextColor="#A0A0A0"
                   keyboardType="numeric"
                   value={phone}
                   onChangeText={setPhone}
                   mask={Masks.BRL_PHONE}
                 />
-                <MaskInput
-                  className="h-14 w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 mb-4 text-base text-gray-800"
+
+                <TextInput
+                  style={styles.input}
                   placeholder="Seu melhor E-mail"
+                  placeholderTextColor="#A0A0A0"
                   keyboardType="email-address"
                   autoCapitalize="none"
                   value={email}
                   onChangeText={setEmail}
                 />
-                <MaskInput
-                  className="h-14 w-full rounded-2xl border border-gray-100 bg-gray-50 px-4 mb-8 text-base text-gray-800"
+
+                <TextInput
+                  style={styles.input}
                   placeholder="Crie uma senha forte"
+                  placeholderTextColor="#A0A0A0"
                   secureTextEntry
                   value={password}
                   onChangeText={setPassword}
                 />
               </Animated.View>
 
-              {/* Botão Final */}
+              {/* Botão de Ação */}
               <Animated.View entering={FadeInDown.delay(700)}>
                 <TouchableOpacity
-                  className="h-16 w-full items-center justify-center rounded-2xl bg-pink-500 shadow-lg shadow-pink-200 active:bg-pink-600"
+                  style={[styles.mainButton, loading && { opacity: 0.7 }]}
                   onPress={handleRegister}
                   disabled={loading}
                 >
-                  {loading ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold text-lg">Finalizar Cadastro</Text>}
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>FINALIZAR CADASTRO</Text>
+                  )}
                 </TouchableOpacity>
 
-                <View className="flex-row items-center justify-center mt-8 mb-10">
-                  <ThemedText className="text-gray-400">Já possui conta? </ThemedText>
+                <View style={styles.footer}>
+                  <Text style={styles.footerText}>Já possui conta? </Text>
                   <Link href="/login" asChild>
-                    <TouchableOpacity><Text className="font-bold text-pink-500">Acessar Login</Text></TouchableOpacity>
+                    <TouchableOpacity>
+                      <Text style={styles.linkText}>Fazer Login</Text>
+                    </TouchableOpacity>
                   </Link>
                 </View>
               </Animated.View>
             </View>
-
           </ScrollView>
         </KeyboardAvoidingView>
-      </ThemedView>
+      </View>
     </TouchableWithoutFeedback>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#FAFAFA',
+  },
+  circleDecorator: {
+    position: 'absolute',
+    top: -50,
+    left: -100,
+    width: 250,
+    height: 250,
+    borderRadius: 125,
+    backgroundColor: '#FDF2F8',
+  },
+  scrollContent: {
+    padding: 30,
+    paddingTop: 80,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 50,
+  },
+  brandName: {
+    fontSize: 32,
+    fontWeight: '300',
+    letterSpacing: 10,
+    color: '#333',
+  },
+  divider: {
+    height: 1,
+    width: 30,
+    backgroundColor: '#DB2777',
+    marginVertical: 8,
+  },
+  brandSubtitle: {
+    fontSize: 10,
+    letterSpacing: 3,
+    color: '#DB2777',
+    fontWeight: '700',
+  },
+  form: {
+    width: '100%',
+  },
+  section: {
+    marginBottom: 30,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 2,
+    color: '#999',
+    marginBottom: 20,
+  },
+  innerLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#BBB',
+    marginBottom: 10,
+    marginTop: 10,
+  },
+  input: {
+    height: 50,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
+    marginBottom: 15,
+    fontSize: 15,
+    color: '#333',
+  },
+  genderContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  genderButton: {
+    flex: 1,
+    height: 40,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#EEE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF',
+  },
+  genderButtonActive: {
+    backgroundColor: '#1A1A1A',
+    borderColor: '#1A1A1A',
+  },
+  genderButtonText: {
+    fontSize: 12,
+    color: '#999',
+    fontWeight: '500',
+  },
+  genderButtonTextActive: {
+    color: '#FFF',
+  },
+  mainButton: {
+    height: 55,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+  },
+  buttonText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 30,
+    marginBottom: 40,
+  },
+  footerText: {
+    color: '#999',
+    fontSize: 14,
+  },
+  linkText: {
+    color: '#DB2777',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+});

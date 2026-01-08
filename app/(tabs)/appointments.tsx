@@ -1,184 +1,244 @@
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { auth, db } from "@/config/firebase";
+import { useAuth } from "@/hooks/useAuth"; // Importa o hook de autenticação
+import { fetchAPI } from "@/services/api";
+import { requestNotificationPermission, scheduleReminders } from "@/services/notifications"; // Importar serviço
 import { Ionicons } from "@expo/vector-icons";
-import { FlashList, ListRenderItem } from "@shopify/flash-list";
-import { useRouter } from "expo-router";
+import { FlashList } from "@shopify/flash-list";
+import { useFocusEffect } from "expo-router"; // Importar useFocusEffect
+import React, { useCallback, useMemo, useState } from "react";
 import {
-    collection,
-    deleteDoc,
-    doc,
-    onSnapshot,
-    orderBy,
-    query,
-    Timestamp,
-    where
-} from "firebase/firestore";
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from "react-native";
-import Animated, { FadeInDown, FadeOut } from "react-native-reanimated";
-import { toast } from "sonner-native";
+    ActivityIndicator,
+    Alert,
+    RefreshControl, // Importar RefreshControl
+    SafeAreaView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 
 interface Appointment {
     id: string;
     serviceName: string;
-    date: Date;
+    date: string;
+    time: string;
+    status: 'confirmado' | 'pendente' | 'concluido';
     price: number;
-    status: 'confirmed' | 'pending' | 'finished';
-    professional: string;
-    userId: string;
 }
 
-const formatDate = (date: Date) => {
-    return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).toUpperCase();
-};
-
-const formatTime = (date: Date) => {
-    return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-};
-
-const getStatusTheme = (appointmentDate: Date, status: string) => {
-    if (status === 'finished') return { border: "border-l-gray-300", bg: "bg-white" };
-
-    const now = new Date();
-    const diffHours = (appointmentDate.getTime() - now.getTime()) / (1000 * 60 * 60);
-
-    if (diffHours < 0) return { border: "border-l-red-400", bg: "bg-red-50/30" };
-    if (diffHours <= 2) return { border: "border-l-yellow-400", bg: "bg-yellow-50/50" };
-    return { border: "border-l-green-400", bg: "bg-white" };
-};
-
 export default function AppointmentsScreen() {
-    const router = useRouter();
+    const { user } = useAuth(); // Obtém o usuário para garantir que a busca só ocorra se logado
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false); // Estado para pull-to-refresh
+    const [filter, setFilter] = useState<'proximos' | 'passados'>('proximos');
 
-    useEffect(() => {
-        const user = auth.currentUser;
-        if (!user) { setLoading(false); return; }
+    // Substituir useEffect por useFocusEffect para recarregar ao focar
+    useFocusEffect(
+        useCallback(() => {
+            if (user) {
+                loadAppointments();
+            }
+        }, [user])
+    );
 
-        const q = query(
-            collection(db, "appointments"),
-            where("userId", "==", user.uid),
-            orderBy("date", "desc")
-        );
+    const loadAppointments = async () => {
+        if (!user?.email) return;
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                date: (doc.data().date as Timestamp).toDate(),
-            })) as Appointment[];
+        try {
+            // setLoading(true); // Removido para evitar piscar tela toda vez que foca
+
+            // 1. Busca Agendamentos
+            const data = await fetchAPI(`/appointments/${user.email}`);
             setAppointments(data);
-            setLoading(false);
-        });
 
-        return () => unsubscribe();
-    }, []);
-
-    const handleCancel = (id: string) => {
-        Alert.alert("Cancelar", "Deseja remover este agendamento?", [
-            { text: "Voltar", style: "cancel" },
-            {
-                text: "Remover", style: "destructive", onPress: async () => {
-                    try {
-                        await deleteDoc(doc(db, "appointments", id));
-                        toast.success("Removido com sucesso.");
-                    } catch (e) { toast.error("Erro ao remover."); }
+            // 2. Busca Configurações do Usuário para saber se agenda lembretes
+            // Idealmente isso viria de um contexto global, mas vamos buscar aqui para garantir
+            try {
+                const profile = await fetchAPI(`/user/profile/${user.email}`);
+                if (profile && (profile as any).notifications_reminders) {
+                    const hasPermission = await requestNotificationPermission();
+                    if (hasPermission) {
+                        await scheduleReminders(data);
+                        // console.log("Lembretes agendados!");
+                    }
                 }
-            },
+            } catch (err) {
+                console.log("Erro ao configurar notificações", err);
+            }
+
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
+
+    const handleRefresh = () => {
+        setRefreshing(true);
+        loadAppointments();
+    };
+
+    const handleCancel = async (id: string) => {
+        Alert.alert("Cancelar", "Tem certeza que deseja cancelar este agendamento?", [
+            { text: "Não", style: "cancel" },
+            {
+                text: "Sim", style: "destructive", onPress: async () => {
+                    try {
+                        await fetchAPI(`/appointments/${id}`, { method: 'DELETE' });
+                        Alert.alert("Sucesso", "Agendamento cancelado.");
+                        loadAppointments(); // Recarrega a lista
+                    } catch (error) {
+                        Alert.alert("Erro", "Não foi possível cancelar.");
+                    }
+                }
+            }
         ]);
     };
 
-    const renderItem: ListRenderItem<Appointment> = ({ item, index }) => {
-        const theme = getStatusTheme(item.date, item.status);
+    const filteredData = useMemo(() => {
+        const today = new Date();
+        const todayString = today.toISOString().split('T')[0]; // Comparação por string YYYY-MM-DD evita fuso
+
+        return appointments.filter(item => {
+            // item.date já vem como YYYY-MM-DD do backend
+            if (filter === 'proximos') {
+                return item.date >= todayString;
+            } else {
+                return item.date < todayString;
+            }
+        });
+    }, [filter, appointments]);
+
+    const StatusBadge = ({ status }: { status: string }) => {
+        const colors = {
+            confirmado: { bg: '#ECFDF5', text: '#10B981' },
+            pendente: { bg: '#FFFBEB', text: '#F59E0B' },
+            concluido: { bg: '#F3F4F6', text: '#6B7280' },
+        };
+        const current = colors[status as keyof typeof colors];
 
         return (
-            <Animated.View
-                entering={FadeInDown.delay(index * 50).duration(500)}
-                exiting={FadeOut}
-                className={`mx-4 mb-4 rounded-xl bg-white shadow-sm border-l-4 ${theme.border} ${theme.bg} flex-row items-center p-4`}
-            >
-                <View className="items-center justify-center rounded-lg bg-gray-50 border border-gray-100 px-3 py-2 mr-4">
-                    <Text className="text-[10px] font-bold text-gray-400">{formatDate(item.date).split(" ")[1]}</Text>
-                    <Text className="text-xl font-bold text-gray-700">{item.date.getDate()}</Text>
-                </View>
-
-                <View className="flex-1">
-                    <View className="flex-row justify-between items-center">
-                        <ThemedText type="defaultSemiBold" className="text-gray-800">{item.serviceName}</ThemedText>
-                        <View className={`px-2 py-0.5 rounded-full ${item.status === 'confirmed' ? 'bg-green-100' : 'bg-gray-100'}`}>
-                            <Text className={`text-[9px] font-black ${item.status === 'confirmed' ? 'text-green-700' : 'text-gray-500'}`}>
-                                {item.status.toUpperCase()}
-                            </Text>
-                        </View>
-                    </View>
-
-                    <Text className="text-gray-500 text-xs mt-1">
-                        <Ionicons name="time-outline" size={12} /> {formatTime(item.date)} • {item.professional}
-                    </Text>
-                </View>
-
-                {item.status !== 'finished' && (
-                    <TouchableOpacity onPress={() => handleCancel(item.id)} className="ml-2 p-2 bg-red-50 rounded-full">
-                        <Ionicons name="trash" size={18} color="#f87171" />
-                    </TouchableOpacity>
-                )}
-            </Animated.View>
+            <View style={[styles.badge, { backgroundColor: current.bg }]}>
+                <Text style={[styles.badgeText, { color: current.text }]}>{status.toUpperCase()}</Text>
+            </View>
         );
     };
 
+    const renderItem = ({ item, index }: { item: Appointment, index: number }) => (
+        <Animated.View
+            entering={FadeInDown.delay(index * 100)}
+            style={styles.appointmentCard}
+        >
+            <View style={styles.cardHeader}>
+                <Text style={styles.dateLabel}>{new Date(item.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()}</Text>
+                <StatusBadge status={item.status} />
+            </View>
+
+            <Text style={styles.serviceTitle}>{item.serviceName}</Text>
+
+            <View style={styles.cardFooter}>
+                <View style={styles.infoRow}>
+                    <Ionicons name="time-outline" size={16} color="#999" />
+                    <Text style={styles.infoText}>{item.time}</Text>
+                </View>
+                <Text style={styles.priceText}>R$ {Number(item.price || 0).toFixed(2)}</Text>
+            </View>
+
+            {/* Botão Cancelar apenas para agendamentos futuros não concluídos */}
+            {filter === 'proximos' && item.status !== 'concluido' && (
+                <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => handleCancel(item.id)}
+                >
+                    <Text style={styles.cancelButtonText}>CANCELAR</Text>
+                </TouchableOpacity>
+            )}
+        </Animated.View>
+    );
+
     return (
-        <ThemedView className="flex-1 bg-gray-50">
+        <SafeAreaView style={styles.container}>
+            <View style={styles.filterContainer}>
+                <TouchableOpacity
+                    style={[styles.filterTab, filter === 'proximos' && styles.filterTabActive]}
+                    onPress={() => setFilter('proximos')}
+                >
+                    <Text style={[styles.filterTabText, filter === 'proximos' && styles.filterTabTextActive]}>PRÓXIMOS</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.filterTab, filter === 'passados' && styles.filterTabActive]}
+                    onPress={() => setFilter('passados')}
+                >
+                    <Text style={[styles.filterTabText, filter === 'passados' && styles.filterTabTextActive]}>HISTÓRICO</Text>
+                </TouchableOpacity>
+            </View>
+
             {loading ? (
-                <View className="flex-1 justify-center items-center"><ActivityIndicator color="#ec4899" /></View>
+                <ActivityIndicator style={{ marginTop: 50 }} color="#DB2777" />
             ) : (
                 <FlashList
-                    data={appointments}
+                    data={filteredData}
                     renderItem={renderItem}
-                    estimatedItemSize={90}
-                    ListHeaderComponent={
-                        <Animated.View entering={FadeInDown} className="bg-pink-500 p-6 pt-16 rounded-b-[40px] mb-6 shadow-lg">
-                            <Text className="text-white/80 font-medium">Sua Agenda</Text>
-                            <Text className="text-3xl font-bold text-white mb-4">Meus Horários</Text>
-
-                            {/* ✅ Legenda de Cores integrada no Header */}
-                            <View className="bg-white/10 p-4 rounded-2xl border border-white/20 mb-2">
-                                <Text className="text-white text-[10px] font-bold mb-3 uppercase tracking-widest">Legenda de Status</Text>
-
-                                <View className="flex-row items-center mb-2">
-                                    <View className="h-2.5 w-2.5 rounded-full bg-green-300 mr-3" />
-                                    <Text className="text-white text-xs opacity-90">Mais de 2h para o início</Text>
-                                </View>
-
-                                <View className="flex-row items-center mb-2">
-                                    <View className="h-2.5 w-2.5 rounded-full bg-yellow-300 mr-3" />
-                                    <Text className="text-white text-xs opacity-90">Próximo (menos de 2h)</Text>
-                                </View>
-
-                                <View className="flex-row items-center">
-                                    <View className="h-2.5 w-2.5 rounded-full bg-red-300 mr-3" />
-                                    <Text className="text-white text-xs opacity-90">Horário já passou</Text>
-                                </View>
-                            </View>
-
-                            <View className="flex-row mt-4">
-                                <View className="bg-white/20 px-4 py-1.5 rounded-full">
-                                    <Text className="text-white text-[10px] font-bold">
-                                        {appointments.filter(a => a.status !== 'finished').length} Agendamentos Ativos
-                                    </Text>
-                                </View>
-                            </View>
-                        </Animated.View>
+                    // estimatedItemSize={120}
+                    keyExtractor={(item) => item.id}
+                    contentContainerStyle={{ paddingBottom: 20 }}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="#DB2777" />
                     }
                     ListEmptyComponent={
-                        <View className="items-center justify-center mt-20 opacity-30">
-                            <Ionicons name="calendar" size={80} color="#9ca3af" />
-                            <Text className="mt-4 font-bold">Nenhum horário marcado</Text>
+                        <View style={styles.emptyContainer}>
+                            <Ionicons name="calendar-outline" size={48} color="#DDD" />
+                            <Text style={styles.emptyText}>Nenhum agendamento encontrado.</Text>
                         </View>
                     }
                 />
             )}
-        </ThemedView>
+        </SafeAreaView>
     );
 }
+
+const styles = StyleSheet.create({
+    container: { flex: 1, backgroundColor: '#FAFAFA' },
+    filterContainer: {
+        flexDirection: 'row',
+        backgroundColor: '#FFF',
+        padding: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+        justifyContent: 'center',
+        gap: 20
+    },
+    filterTab: { paddingVertical: 8, paddingHorizontal: 15 },
+    filterTabActive: { borderBottomWidth: 2, borderBottomColor: '#DB2777' },
+    filterTabText: { fontSize: 11, fontWeight: '700', color: '#999', letterSpacing: 1 },
+    filterTabTextActive: { color: '#1A1A1A' },
+    listContent: { padding: 20 },
+    appointmentCard: {
+        backgroundColor: '#FFF',
+        borderRadius: 4,
+        padding: 20,
+        marginBottom: 15,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.02,
+        shadowRadius: 5,
+        elevation: 2,
+    },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+    dateLabel: { fontSize: 10, fontWeight: '800', color: '#DB2777', letterSpacing: 1.5 },
+    badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
+    badgeText: { fontSize: 9, fontWeight: '800' },
+    serviceTitle: { fontSize: 17, fontWeight: '500', color: '#1A1A1A', marginBottom: 15 },
+    cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    infoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    infoText: { fontSize: 14, color: '#666' },
+    priceText: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
+    cancelButton: { marginTop: 20, paddingTop: 15, borderTopWidth: 1, borderTopColor: '#F9FAFB', alignItems: 'center' },
+    cancelButtonText: { fontSize: 10, fontWeight: '700', color: '#999', letterSpacing: 1 },
+    emptyContainer: { alignItems: 'center', marginTop: 100 },
+    emptyText: { marginTop: 15, color: '#BBB', fontSize: 14 }
+});

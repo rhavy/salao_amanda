@@ -1,181 +1,186 @@
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { auth, db } from "@/config/firebase";
+import ScheduleModal from "@/components/schedule";
+import { useAuth } from "@/hooks/useAuth";
+import { fetchAPI } from "@/services/api";
 import { Ionicons } from "@expo/vector-icons";
 import { FlashList, ListRenderItem } from "@shopify/flash-list";
-import { useRouter } from "expo-router";
-import { collection, doc, getDoc, onSnapshot, orderBy, query } from "firebase/firestore"; // Adicionado doc e getDoc
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Text, TouchableOpacity, View } from "react-native";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from "react-native";
+import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 
-export interface Service {
+interface Service {
   id: string;
   name: string;
-  duration: number;
   price: number;
-  category?: string;
+  duration: number; // em minutos
+  category: string;
 }
 
-const formatDuration = (minutes: number) => {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h > 0 && m > 0) return `${h}h ${m}min`;
-  if (h > 0) return `${h}h`;
-  return `${m}min`;
-};
-
-const formatPrice = (price: number) => {
-  return price.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
-};
-
 export default function ServicesScreen() {
-  const router = useRouter();
-  const [services, setServices] = useState<Service[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [userGender, setUserGender] = useState<string>("Feminino"); // Estado para o gênero
+  const { user } = useAuth();
 
-  const userDisplayName = auth.currentUser?.displayName || "Cliente";
-  const firstName = userDisplayName.split(" ")[0];
+  const [services, setServices] = useState<Service[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState("Todos");
+  const [loading, setLoading] = useState(true);
+
+  const firstName = user?.name.split(' ')[0] || "Cliente";
+  const userGender = user ? (user.name.endsWith('o') ? "Masculino" : "Feminino") : "Feminino";
+
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
 
   useEffect(() => {
-    // 1. Buscar Gênero do Usuário para a saudação
-    const fetchUserGender = async () => {
-      if (auth.currentUser) {
-        try {
-          const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
-          if (userDoc.exists()) {
-            setUserGender(userDoc.data().gender || "Feminino");
-          }
-        } catch (error) {
-          console.error("Erro ao buscar gênero:", error);
-        }
-      }
-    };
-
-    fetchUserGender();
-
-    // 2. Buscar Serviços
-    const q = query(collection(db, "services"), orderBy("name", "asc"));
-    const unsubscribe = onSnapshot(q, (querySnapshot) => {
-      const servicesArray: Service[] = [];
-      querySnapshot.forEach((doc) => {
-        servicesArray.push({
-          id: doc.id,
-          ...doc.data(),
-        } as Service);
-      });
-
-      setServices(servicesArray);
-      setLoading(false);
-    }, (error) => {
-      console.error("Erro ao buscar serviços: ", error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    loadServices();
   }, []);
+
+  const loadServices = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchAPI('/services');
+      setServices(data);
+      // Gera as categorias dinamicamente a partir dos serviços
+      const uniqueCategories = ["Todos", ...new Set(data.map((s: Service) => s.category))] as string[];
+      setCategories(uniqueCategories);
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Erro", "Não foi possível carregar os serviços.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredServices = useMemo(() => {
+    if (selectedCategory === "Todos") return services;
+    return services.filter(s => s.category === selectedCategory);
+  }, [selectedCategory, services]);
+
+  const handleOpenSchedule = (service: Service) => {
+    setSelectedService(service);
+    setModalVisible(true);
+  };
 
   const renderItem: ListRenderItem<Service> = ({ item, index }) => (
     <Animated.View
-      entering={FadeInDown.delay(index * 100).duration(600).springify()}
-      className="mx-4 mb-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm android:elevation-2"
+      entering={FadeInDown.delay(index * 50).duration(500)}
+      style={styles.card}
     >
-      <View className="flex-row justify-between items-center">
-        <View className="flex-1 pr-4">
-          <ThemedText type="subtitle" className="text-gray-800 text-lg">
-            {item.name}
-          </ThemedText>
-          <ThemedText className="mt-1 text-gray-500 text-sm">
-            ⏱ {formatDuration(item.duration)}
-          </ThemedText>
-          <ThemedText type="defaultSemiBold" className="mt-2 text-lg text-pink-600">
-            {formatPrice(item.price)}
-          </ThemedText>
+      <View style={styles.cardContent}>
+        <View style={styles.infoContainer}>
+          <Text style={styles.categoryBadge}>{item.category.toUpperCase()}</Text>
+          <Text style={styles.serviceName}>{item.name}</Text>
+          <View style={styles.detailsRow}>
+            <Ionicons name="time-outline" size={14} color="#999" />
+            <Text style={styles.durationText}>{item.duration} min</Text>
+          </View>
+          <Text style={styles.priceText}>
+            {item.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          </Text>
         </View>
 
         <TouchableOpacity
-          className="rounded-full bg-pink-500 px-6 py-3 active:bg-pink-600 shadow-sm"
-          onPress={() =>
-            router.push({
-              pathname: "/schedule",
-              params: { serviceId: item.id }
-            })
-          }
+          style={styles.bookButton}
+          onPress={() => handleOpenSchedule(item)}
         >
-          <Text className="font-bold text-white text-sm">Agendar</Text>
+          <Text style={styles.bookButtonText}>AGENDAR</Text>
         </TouchableOpacity>
       </View>
     </Animated.View>
   );
 
   return (
-    <ThemedView className="flex-1 bg-gray-50">
+    <SafeAreaView style={styles.container}>
       {loading ? (
-        <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#ec4899" />
-          <Text className="mt-2 text-gray-400">Carregando serviços...</Text>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color="#DB2777" />
         </View>
       ) : (
-        <FlashList<Service>
-          data={services}
-          renderItem={renderItem}
-          keyExtractor={(item: Service) => item.id}
-          estimatedItemSize={120}
-          contentContainerStyle={{ paddingBottom: 80 }}
-          ListEmptyComponent={
-            <View className="items-center justify-center mt-20">
-              <Ionicons name="cut-outline" size={64} color="#d1d5db" />
-              <Text className="text-gray-400 mt-4 text-center px-10">
-                Nenhum serviço encontrado.
-              </Text>
-              <TouchableOpacity
-                onPress={() => router.push("/admin-setup")}
-                className="mt-6 bg-pink-100 px-6 py-3 rounded-full"
-              >
-                <Text className="text-pink-600 font-bold">Configurar Banco de Dados</Text>
-              </TouchableOpacity>
-            </View>
-          }
-          ListHeaderComponent={
-            <Animated.View
-              entering={FadeInDown.duration(800).springify()}
-              className="bg-pink-500 p-6 pt-12 rounded-b-3xl shadow-md mb-6"
+        <View style={{ flex: 1 }}>
+          <View style={styles.header}>
+            {/* <Text style={styles.title}>Nossos Serviços</Text> */}
+            {/* <View style={styles.titleDivider} /> */}
+          </View>
+
+          <View style={styles.filterWrapper}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterScroll}
             >
-              <View className="flex-row justify-between items-start">
-                <View>
-                  <Text className="text-white opacity-80 mb-1 font-medium">
-                    {/* ✅ Ajuste dinâmico de gênero aplicado aqui */}
-                    Bem-vind{userGender === "Masculino" ? "o" : "a"}, {firstName}! ✨
-                  </Text>
-                  <Text className="text-3xl font-bold text-white">Nossos Serviços</Text>
-                </View>
+              {categories.map((cat, index) => (
+                <Animated.View key={cat} entering={FadeInRight.delay(index * 100)}>
+                  <TouchableOpacity
+                    onPress={() => setSelectedCategory(cat)}
+                    style={[
+                      styles.filterTab,
+                      selectedCategory === cat && styles.filterTabActive
+                    ]}
+                  >
+                    <Text style={[
+                      styles.filterTabText,
+                      selectedCategory === cat && styles.filterTabTextActive
+                    ]}>
+                      {cat.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              ))}
+            </ScrollView>
+          </View>
 
-                <TouchableOpacity
-                  onPress={() => router.push("/admin-setup")}
-                  className="bg-white/20 p-2 rounded-full"
-                >
-                  <Ionicons name="settings-outline" size={24} color="white" />
-                </TouchableOpacity>
-              </View>
+          <FlashList
+            data={filteredServices}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listPadding}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>Nenhum serviço nesta categoria.</Text>
+            }
+          />
 
-              <View className="flex-row items-center mt-3">
-                <View className="bg-white/20 px-3 py-1 rounded-full mr-3">
-                  <Text className="text-white font-semibold">
-                    {services.length} opções disponíveis
-                  </Text>
-                </View>
-                <View className="bg-white/20 px-3 py-1 rounded-full">
-                  <Text className="text-white font-semibold">Qualidade Premium</Text>
-                </View>
-              </View>
-            </Animated.View>
-          }
-        />
+          <ScheduleModal
+            visible={modalVisible}
+            onClose={() => setModalVisible(false)}
+            serviceName={selectedService?.name}
+            servicePrice={selectedService?.price}
+          />
+        </View>
       )}
-    </ThemedView>
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#FAFAFA' },
+  loadingContainer: { flex: 1, justifyContent: 'center' },
+  header: { paddingHorizontal: 25, paddingTop: 30, marginBottom: 20 },
+  welcomeText: { fontSize: 10, letterSpacing: 3, color: '#DB2777', fontWeight: '700', marginBottom: 5 },
+  title: { fontSize: 28, fontWeight: '300', color: '#333' },
+  titleDivider: { height: 1, width: 40, backgroundColor: '#DB2777', marginTop: 10 },
+  filterWrapper: { marginBottom: 20 },
+  filterScroll: { paddingHorizontal: 25, gap: 10 },
+  filterTab: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#EEE' },
+  filterTabActive: { backgroundColor: '#1A1A1A', borderColor: '#1A1A1A' },
+  filterTabText: { fontSize: 10, fontWeight: '700', letterSpacing: 1, color: '#999' },
+  filterTabTextActive: { color: '#FFF' },
+  listPadding: { paddingBottom: 40, paddingHorizontal: 20 },
+  card: { backgroundColor: '#FFF', marginBottom: 12, padding: 18, borderRadius: 2, borderLeftWidth: 2, borderLeftColor: '#DB2777', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 5, elevation: 2 },
+  cardContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  infoContainer: { flex: 1 },
+  categoryBadge: { fontSize: 8, letterSpacing: 1.5, color: '#DB2777', fontWeight: '800', marginBottom: 4 },
+  serviceName: { fontSize: 16, fontWeight: '500', color: '#333', marginBottom: 4 },
+  detailsRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 },
+  durationText: { fontSize: 12, color: '#999' },
+  priceText: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
+  bookButton: { backgroundColor: '#1A1A1A', paddingHorizontal: 15, paddingVertical: 12, borderRadius: 2 },
+  bookButtonText: { color: '#FFF', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  emptyText: { textAlign: 'center', marginTop: 50, color: '#BBB', fontSize: 14 }
+});

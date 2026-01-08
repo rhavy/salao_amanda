@@ -1,97 +1,136 @@
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { auth, db, storage } from "@/config/firebase";
+import { useAuth } from "@/hooks/useAuth";
+import { fetchAPI } from "@/services/api";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from "expo-router";
-import { onAuthStateChanged, signOut, User } from "firebase/auth";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Image, ScrollView, TouchableOpacity, View } from "react-native";
+import {
+    ActivityIndicator,
+    Alert,
+    Image,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
+} from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { toast } from "sonner-native";
-
-interface UserProfile {
-    name: string;
-    email: string;
-    avatar?: string;
-    appointmentsCount?: number;
-    memberSince?: string;
-}
-
-// ✅ Função de formatação ajustada para melhor legibilidade
-const formatMemberDate = (dateString: string | undefined) => {
-    if (!dateString) return "N/A";
-    try {
-        const date = new Date(dateString);
-        // Retorna ex: "jan 2024"
-        const formatted = date.toLocaleDateString("pt-BR", {
-            month: "short",
-            year: "numeric",
-        }).replace('.', '');
-
-        return formatted;
-    } catch (e) {
-        return "N/A";
-    }
-};
 
 export default function ProfileScreen() {
     const router = useRouter();
+    const { user, logout } = useAuth();
 
-    const [currentUser, setCurrentUser] = useState<User | null>(null);
-    const [profileData, setProfileData] = useState<UserProfile | null>(null);
+    const [profileData, setProfileData] = useState<ReturnType<typeof useAuth>['user']>(null);
+    const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
-    const [loadingData, setLoadingData] = useState(true);
+
+    // Estado para Edição
+    const [editModalVisible, setEditModalVisible] = useState(false);
+    const [editName, setEditName] = useState("");
+    const [editPhone, setEditPhone] = useState("");
+
+    // Estados para Modais de Configurações
+    const [notifModalVisible, setNotifModalVisible] = useState(false);
+    const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
+
+    // Estados dos Toggles (Iniciados com valores padrão, atualizados no loadProfile)
+    const [settings, setSettings] = useState({
+        notifications_reminders: true,
+        notifications_marketing: false,
+        privacy_use_photos: false
+    });
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                setCurrentUser(user);
-                await fetchUserProfile(user.uid);
-            } else {
-                setCurrentUser(null);
-                setProfileData(null);
-                setLoadingData(false);
-                router.replace("/login");
-            }
-        });
+        if (user) {
+            loadProfile();
+        }
+    }, [user]);
 
-        return () => unsubscribe();
-    }, []);
+    const loadProfile = async () => {
+        if (!user?.email) {
+            Alert.alert("Erro", "Nenhum usuário logado para carregar o perfil.");
+            return;
+        }
 
-    const fetchUserProfile = async (uid: string) => {
-        setLoadingData(true);
         try {
-            const userDocRef = doc(db, "users", uid);
-            const userDocSnap = await getDoc(userDocRef);
+            setLoading(true);
+            const data = await fetchAPI(`/user/profile/${user.email}`);
+            setProfileData(data);
 
-            if (userDocSnap.exists()) {
-                setProfileData(userDocSnap.data() as UserProfile);
-            } else {
-                // Caso o doc não exista no Firestore, usa dados básicos do Auth
-                setProfileData({
-                    name: auth.currentUser?.displayName || "Usuário",
-                    email: auth.currentUser?.email || "",
-                    appointmentsCount: 0,
-                    memberSince: new Date().toISOString()
+            // Atualizar settings com dados do banco
+            if (data) {
+                setSettings({
+                    notifications_reminders: !!(data as any).notifications_reminders,
+                    notifications_marketing: !!(data as any).notifications_marketing,
+                    privacy_use_photos: !!(data as any).privacy_use_photos
                 });
             }
         } catch (error) {
-            console.error("Erro ao buscar dados do perfil:", error);
-            toast.error("Erro", { description: "Não foi possível carregar os dados." });
+            console.error(error);
+            Alert.alert("Erro", "Não foi possível carregar os dados do perfil.");
         } finally {
-            setLoadingData(false);
+            setLoading(false);
+        }
+    };
+
+    const handleOpenEdit = () => {
+        if (profileData) {
+            setEditName(profileData.name || "");
+            setEditPhone((profileData as any).phone || "");
+            setEditModalVisible(true);
+        }
+    };
+
+    const handleSaveProfile = async () => {
+        try {
+            setUploading(true);
+            await fetchAPI('/user/', {
+                method: 'PUT',
+                body: JSON.stringify({
+                    email: user!.email,
+                    name: editName,
+                    phone: editPhone
+                })
+            });
+            Alert.alert("Sucesso", "Perfil atualizado!");
+            setEditModalVisible(false);
+            loadProfile();
+        } catch (error: any) {
+            Alert.alert("Erro", error.message || "Falha ao atualizar");
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const handleToggle = async (key: string, value: boolean) => {
+        // Atualiza UI otimistamente
+        setSettings(prev => ({ ...prev, [key]: value }));
+
+        try {
+            await fetchAPI('/user/', {
+                method: 'PUT',
+                body: JSON.stringify({
+                    email: user!.email,
+                    [key]: value
+                })
+            });
+        } catch (error) {
+            console.error("Erro ao salvar config", error);
+            // Reverte em caso de erro (opcional, mas recomendado)
+            setSettings(prev => ({ ...prev, [key]: !value }));
+            Alert.alert("Erro", "Falha ao salvar configuração.");
         }
     };
 
     const handlePickImage = async () => {
-        if (!currentUser) return;
-
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-            toast.error("Permissão negada", { description: "Precisamos de acesso às suas fotos." });
+            Alert.alert("Permissão negada", "Precisamos de acesso às suas fotos para mudar o avatar.");
             return;
         }
 
@@ -103,33 +142,12 @@ export default function ProfileScreen() {
         });
 
         if (!result.canceled) {
-            uploadImageToWeb(result.assets[0].uri);
-        }
-    };
-
-    const uploadImageToWeb = async (fileUri: string) => {
-        if (!currentUser) return;
-
-        setUploading(true);
-        try {
-            const response = await fetch(fileUri);
-            const blob = await response.blob();
-
-            const storageRef = ref(storage, `avatars/${currentUser.uid}.jpg`);
-            await uploadBytes(storageRef, blob);
-
-            const downloadUrl = await getDownloadURL(storageRef);
-
-            const userRef = doc(db, "users", currentUser.uid);
-            await updateDoc(userRef, { avatar: downloadUrl });
-
-            setProfileData(prev => prev ? { ...prev, avatar: downloadUrl } : null);
-
-            toast.success("Sucesso!", { description: "Foto de perfil atualizada." });
-        } catch (error) {
-            toast.error("Erro", { description: "Falha ao salvar imagem." });
-        } finally {
-            setUploading(false);
+            setUploading(true);
+            // Simulação de upload. Em um app real, aqui iria a chamada para a API de upload.
+            setTimeout(() => {
+                setProfileData(prev => prev ? { ...prev, avatar: result.assets[0].uri } : null);
+                setUploading(false);
+            }, 1500);
         }
     };
 
@@ -140,131 +158,391 @@ export default function ProfileScreen() {
                 text: "Sair",
                 style: "destructive",
                 onPress: async () => {
-                    await signOut(auth);
-                    toast.success("Até logo!");
+                    await logout();
+                    router.replace("/login");
                 }
             },
         ]);
     };
 
     const MenuItem = ({ icon, title, subtitle, onPress, isDestructive = false }: any) => (
-        <TouchableOpacity
-            onPress={onPress}
-            className="flex-row items-center bg-white p-4 mb-3 rounded-2xl border border-gray-100 active:bg-gray-50 shadow-sm"
-        >
-            <View className={`h-10 w-10 rounded-full items-center justify-center ${isDestructive ? 'bg-red-50' : 'bg-pink-50'}`}>
-                <Ionicons name={icon} size={20} color={isDestructive ? "#ef4444" : "#ec4899"} />
+        <TouchableOpacity onPress={onPress} style={styles.menuItem}>
+            <View style={[styles.menuIconWrapper, isDestructive && styles.menuIconDestructive]}>
+                <Ionicons name={icon} size={20} color={isDestructive ? "#EF4444" : "#DB2777"} />
             </View>
-            <View className="flex-1 ml-4">
-                <ThemedText className={`font-bold text-base ${isDestructive ? 'text-red-500' : 'text-gray-800'}`}>{title}</ThemedText>
-                {subtitle && <ThemedText className="text-gray-400 text-xs">{subtitle}</ThemedText>}
+            <View style={styles.menuTextContainer}>
+                <Text style={[styles.menuTitle, isDestructive && styles.destructiveText]}>{title}</Text>
+                {subtitle && <Text style={styles.menuSubtitle}>{subtitle}</Text>}
             </View>
-            <Ionicons name="chevron-forward" size={18} color="#D1D5DB" />
+            <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
         </TouchableOpacity>
     );
 
-    if (loadingData) {
+    if (loading) {
         return (
-            <ThemedView className="flex-1 justify-center items-center bg-white">
-                <ActivityIndicator size="large" color="#ec4899" />
-            </ThemedView>
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#DB2777" />
+            </View>
         );
     }
 
     return (
-        <ThemedView className="flex-1 bg-gray-50">
-            <ScrollView showsVerticalScrollIndicator={false}>
+        <View style={styles.container}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
-                <Animated.View
-                    entering={FadeInDown.duration(800).springify()}
-                    className="bg-pink-500 pt-16 pb-10 items-center rounded-b-[40px] shadow-lg"
-                >
-                    <View className="relative">
-                        <View className="w-24 h-24 rounded-full border-4 border-white/30 overflow-hidden bg-gray-200">
+                {/* Header de Perfil */}
+                <Animated.View entering={FadeInDown.duration(800)} style={styles.profileHeader}>
+                    <View style={styles.avatarContainer}>
+                        <View style={styles.imageWrapper}>
                             {uploading ? (
-                                <View className="flex-1 items-center justify-center">
-                                    <ActivityIndicator color="#ec4899" />
-                                </View>
+                                <ActivityIndicator color="#DB2777" />
                             ) : (
-                                <Image
-                                    source={{ uri: profileData?.avatar || "https://via.placeholder.com/150" }}
-                                    className="w-full h-full"
-                                />
+                                <Image source={{ uri: profileData?.avatar }} style={styles.avatarImage} />
                             )}
                         </View>
-
-                        <TouchableOpacity
-                            onPress={handlePickImage}
-                            disabled={uploading}
-                            className="absolute bottom-0 right-0 bg-white p-2 rounded-full shadow-md active:bg-gray-100"
-                        >
-                            <Ionicons name="camera" size={16} color="#ec4899" />
+                        <TouchableOpacity style={styles.cameraButton} onPress={handlePickImage}>
+                            <Ionicons name="camera" size={14} color="#FFF" />
                         </TouchableOpacity>
                     </View>
 
-                    {/* ✅ Nome exibido com tratamento de Fallback */}
-                    <ThemedText className="text-white text-2xl font-bold mt-4">
-                        {profileData?.name?.split(' ')[0] || "Usuário"}
-                    </ThemedText>
-                    <ThemedText className="text-pink-100 opacity-80">{profileData?.email}</ThemedText>
+                    <Text style={styles.userName}>{profileData?.name}</Text>
+                    <Text style={styles.userEmail}>{profileData?.email}</Text>
 
-                    <View className="flex-row mt-6 w-[80%] bg-white/10 rounded-2xl p-4">
-                        <View className="flex-1 items-center border-r border-white/20">
-                            <ThemedText className="text-white font-bold text-lg">{profileData?.appointmentsCount || 0}</ThemedText>
-                            <ThemedText className="text-pink-100 text-[10px] uppercase">Visitas</ThemedText>
+                    {/* Stats Bar */}
+                    <View style={styles.statsContainer}>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statValue}>{profileData?.appointmentsCount}</Text>
+                            <Text style={styles.statLabel}>VISITAS</Text>
                         </View>
-                        <View className="flex-1 items-center">
-                            {/* ✅ Data formatada aplicada aqui */}
-                            <ThemedText className="text-white font-bold text-lg capitalize">
-                                {formatMemberDate(profileData?.memberSince)}
-                            </ThemedText>
-                            <ThemedText className="text-pink-100 text-[10px] uppercase">Cliente desde</ThemedText>
+                        <View style={styles.statDivider} />
+                        <View style={styles.statItem}>
+                            <Text style={styles.statValue}>
+                                {profileData?.memberSince
+                                    ? new Date(profileData.memberSince).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).toUpperCase().replace('.', '')
+                                    : '-'}
+                            </Text>
+                            <Text style={styles.statLabel}>MEMBRO DESDE</Text>
                         </View>
                     </View>
                 </Animated.View>
 
-                <View className="p-6">
-                    <Animated.View entering={FadeInDown.delay(200).duration(800)}>
-                        <ThemedText className="text-gray-400 font-bold mb-3 uppercase text-xs tracking-widest ml-1">Configurações</ThemedText>
+                {/* Menu de Opções */}
+                <View style={styles.menuSection}>
+                    <Text style={styles.sectionTitle}>CONFIGURAÇÕES</Text>
 
-                        <MenuItem
-                            icon="person-outline"
-                            title="Dados Pessoais"
-                            subtitle="Nome, telefone e e-mail"
-                            onPress={() => router.push("/edit-profile")}
-                        />
-                        <MenuItem
-                            icon="notifications-outline"
-                            title="Notificações"
-                            subtitle="Lembretes de agendamento"
-                            onPress={() => router.push("/notifications-settings")}
-                        />
-                        <MenuItem
-                            icon="lock-closed-outline"
-                            title="Segurança"
-                            subtitle="Alterar minha senha"
-                            onPress={() => router.push("/security-settings")}
-                        />
-                        <MenuItem
-                            icon="help-circle-outline"
-                            title="Ajuda & Suporte"
-                            onPress={() => router.push("/location")}
-                        />
-
-                        <View className="mt-4">
-                            <MenuItem
-                                icon="log-out-outline"
-                                title="Sair da Conta"
-                                onPress={handleLogout}
-                                isDestructive={true}
-                            />
-                        </View>
-                    </Animated.View>
-
-                    <ThemedText className="text-center text-gray-300 text-xs mt-6 mb-10">Versão 1.0.4 - Salão Amanda</ThemedText>
+                    <MenuItem
+                        icon="person-outline"
+                        title="Dados Pessoais"
+                        subtitle="Editar nome e contato"
+                        onPress={handleOpenEdit}
+                    />
+                    <MenuItem
+                        icon="notifications-outline"
+                        title="Notificações"
+                        subtitle="Lembretes de horário"
+                        onPress={() => setNotifModalVisible(true)}
+                    />
+                    <MenuItem
+                        icon="shield-checkmark-outline"
+                        title="Privacidade"
+                        onPress={() => setPrivacyModalVisible(true)}
+                    />
+                    <MenuItem
+                        icon="log-out-outline"
+                        title="Sair da Conta"
+                        isDestructive={true}
+                        onPress={handleLogout}
+                    />
                 </View>
 
+
+                <Text style={styles.versionText}>Versão 1.0.4 • Salão Amanda</Text>
             </ScrollView>
-        </ThemedView>
+
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={editModalVisible}
+                onRequestClose={() => setEditModalVisible(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
+                    style={styles.modalOverlay}
+                >
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Editar Perfil</Text>
+                            <TouchableOpacity onPress={() => setEditModalVisible(false)}>
+                                <Ionicons name="close" size={24} color="#333" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>NOME COMPLETO</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={editName}
+                                onChangeText={setEditName}
+                                placeholder="Seu nome"
+                            />
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>TELEFONE / WHATSAPP</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={editPhone}
+                                onChangeText={setEditPhone}
+                                placeholder="(XX) XXXXX-XXXX"
+                                keyboardType="phone-pad"
+                            />
+                        </View>
+
+                        <TouchableOpacity
+                            style={styles.saveButton}
+                            onPress={handleSaveProfile}
+                            disabled={uploading}
+                        >
+                            {uploading ? (
+                                <ActivityIndicator color="#FFF" />
+                            ) : (
+                                <Text style={styles.saveButtonText}>SALVAR ALTERAÇÕES</Text>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
+
+            {/* Modal Notificações */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={notifModalVisible}
+                onRequestClose={() => setNotifModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Configurar Notificações</Text>
+                            <TouchableOpacity onPress={() => setNotifModalVisible(false)}>
+                                <Ionicons name="close" size={24} color="#333" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.toggleRow}>
+                            <View style={styles.toggleText}>
+                                <Text style={styles.toggleLabel}>Lembretes de Agendamento</Text>
+                                <Text style={styles.toggleDesc}>Receba avisos antes do seu horário.</Text>
+                            </View>
+                            <Switch
+                                trackColor={{ false: "#E5E7EB", true: "#DB2777" }}
+                                thumbColor={"#FFF"}
+                                onValueChange={(val) => handleToggle('notifications_reminders', val)}
+                                value={settings.notifications_reminders}
+                            />
+                        </View>
+
+                        <View style={[styles.toggleRow, styles.borderTop]}>
+                            <View style={styles.toggleText}>
+                                <Text style={styles.toggleLabel}>Promoções e Novidades</Text>
+                                <Text style={styles.toggleDesc}>Fique por dentro de ofertas exclusivas.</Text>
+                            </View>
+                            <Switch
+                                trackColor={{ false: "#E5E7EB", true: "#DB2777" }}
+                                thumbColor={"#FFF"}
+                                onValueChange={(val) => handleToggle('notifications_marketing', val)}
+                                value={settings.notifications_marketing}
+                            />
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Modal Privacidade */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={privacyModalVisible}
+                onRequestClose={() => setPrivacyModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Privacidade</Text>
+                            <TouchableOpacity onPress={() => setPrivacyModalVisible(false)}>
+                                <Ionicons name="close" size={24} color="#333" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.toggleRow}>
+                            <View style={styles.toggleText}>
+                                <Text style={styles.toggleLabel}>Uso de Fotos no Portfólio</Text>
+                                <Text style={styles.toggleDesc}>Permitir que o salão use fotos do 'depois' nas redes sociais.</Text>
+                            </View>
+                            <Switch
+                                trackColor={{ false: "#E5E7EB", true: "#DB2777" }}
+                                thumbColor={"#FFF"}
+                                onValueChange={(val) => handleToggle('privacy_use_photos', val)}
+                                value={settings.privacy_use_photos}
+                            />
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+        </View>
     );
 }
+
+const styles = StyleSheet.create({
+    container: { flex: 1, backgroundColor: '#FAFAFA' },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
+    },
+    modalContent: {
+        backgroundColor: '#FFF',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 25,
+        paddingBottom: 40,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 5,
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 25,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: '#333',
+    },
+    inputGroup: {
+        marginBottom: 20,
+    },
+    label: {
+        fontSize: 10,
+        fontWeight: '800',
+        color: '#999',
+        marginBottom: 8,
+        letterSpacing: 1,
+    },
+    input: {
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 8,
+        padding: 15,
+        fontSize: 16,
+        color: '#1A1A1A',
+    },
+    saveButton: {
+        backgroundColor: '#DB2777',
+        padding: 16,
+        borderRadius: 8,
+        alignItems: 'center',
+        marginTop: 10,
+    },
+    saveButtonText: {
+        color: '#FFF',
+        fontSize: 14,
+        fontWeight: 'bold',
+        letterSpacing: 1,
+    },
+    toggleRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 15,
+    },
+    toggleText: { flex: 1, paddingRight: 10 },
+    toggleLabel: { fontSize: 16, color: '#333', fontWeight: '500' },
+    toggleDesc: { fontSize: 12, color: '#999', marginTop: 2 },
+    borderTop: { borderTopWidth: 1, borderTopColor: '#F3F4F6' },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    scrollContent: { paddingBottom: 40 },
+    profileHeader: {
+        alignItems: 'center',
+        paddingVertical: 40,
+        backgroundColor: '#FFF',
+        borderBottomWidth: 1,
+        borderBottomColor: '#F3F4F6',
+    },
+    avatarContainer: {
+        position: 'relative',
+        marginBottom: 20,
+    },
+    imageWrapper: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
+        overflow: 'hidden',
+        justifyContent: 'center',
+        alignItems: 'center'
+    },
+    avatarImage: { width: '100%', height: '100%' },
+    cameraButton: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        backgroundColor: '#1A1A1A',
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 3,
+        borderColor: '#FFF'
+    },
+    userName: { fontSize: 22, fontWeight: '300', color: '#1A1A1A', letterSpacing: 0.5 },
+    userEmail: { fontSize: 14, color: '#999', marginTop: 4 },
+    statsContainer: {
+        flexDirection: 'row',
+        marginTop: 30,
+        backgroundColor: '#FAFAFA',
+        borderRadius: 12,
+        paddingVertical: 15,
+        paddingHorizontal: 30,
+        width: '85%',
+    },
+    statItem: { flex: 1, alignItems: 'center' },
+    statValue: { fontSize: 16, fontWeight: '700', color: '#1A1A1A' },
+    statLabel: { fontSize: 9, letterSpacing: 1, color: '#999', marginTop: 4 },
+    statDivider: { width: 1, backgroundColor: '#EEE', height: '100%', marginHorizontal: 20 },
+    menuSection: { padding: 25 },
+    sectionTitle: { fontSize: 10, letterSpacing: 2, fontWeight: '800', color: '#BBB', marginBottom: 20 },
+    menuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFF',
+        padding: 16,
+        borderRadius: 8,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#F3F4F6'
+    },
+    menuIconWrapper: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#FDF2F8',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 15
+    },
+    menuIconDestructive: { backgroundColor: '#FEF2F2' },
+    menuTextContainer: { flex: 1 },
+    menuTitle: { fontSize: 15, fontWeight: '500', color: '#333' },
+    menuSubtitle: { fontSize: 12, color: '#999', marginTop: 2 },
+    destructiveText: { color: '#EF4444' },
+    versionText: { textAlign: 'center', color: '#CCC', fontSize: 11, letterSpacing: 1, marginTop: 10 }
+});

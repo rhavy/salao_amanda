@@ -1,145 +1,265 @@
-import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { auth } from "@/config/firebase"; // Importar a instância de autenticação
+import { useAuth } from "@/hooks/useAuth";
+import { fetchAPI } from "@/services/api"; // Importa o fetchAPI
+import { Ionicons } from "@expo/vector-icons";
 import { Link, useRouter } from "expo-router";
-import { signInWithEmailAndPassword } from "firebase/auth"; // Importar a função de login
 import { useState } from "react";
 import {
-  ActivityIndicator, // Importar ActivityIndicator para feedback de carregamento
+  ActivityIndicator,
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View
 } from "react-native";
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { toast } from 'sonner-native';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { saveUser } = useAuth();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false); // Estado de carregamento
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
-      toast.error("Ops!", {
-        description: "Por favor, preencha todos os campos."
-      });
+      Alert.alert("Atenção", "Por favor, preencha todos os campos.");
       return;
     }
 
-    setLoading(true); // Inicia o carregamento
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      toast.success("Seja bem-vindo(a) ao Salão Amanda", {
-        description: "Login realizado com sucesso."
+      setLoading(true);
+
+      const response = await fetchAPI('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
       });
-      router.replace("/(tabs)"); // Redireciona para a tela principal (tabs)
-    } catch (error: any) {
-      console.error("Erro ao fazer login:", error.code, error.message);
-      let errorMessage = "Ocorreu um erro ao tentar fazer login. Tente novamente.";
-      if (error.code === 'auth/invalid-email') {
-        errorMessage = "E-mail inválido.";
-      } else if (error.code === 'auth/user-disabled') {
-        errorMessage = "Esta conta foi desativada.";
-      } else if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        errorMessage = "E-mail ou senha incorretos.";
+
+      // A API não está retornando um token, então salvamos o usuário e um token nulo.
+      // Isso permitirá que o app continue, mas as rotas protegidas por token falharão.
+      if (response.user) {
+        await saveUser({ user: response.user, token: null }); // Token é null
+        router.replace("/(tabs)");
+      } else {
+        throw new Error("Resposta da API de login inválida: 'user' não encontrado.");
       }
-      toast.error("Erro no Login", {
-        description: errorMessage
-      });
+
+    } catch (error: any) {
+      Alert.alert("Erro no Login", error.message || "Não foi possível entrar. Verifique suas credenciais.");
     } finally {
-      setLoading(false); // Finaliza o carregamento
+      setLoading(false);
     }
   };
 
+
+
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <ThemedView className="flex-1 bg-white p-4">
+      <View style={styles.container}>
+        {/* Detalhe Decorativo de Fundo */}
+        <View style={styles.circleDecorator} />
+
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="flex-1 justify-center items-center"
+          style={styles.content}
         >
-
-          {/* Animação 1: Título e Subtítulo */}
           <Animated.View
-            entering={FadeInDown.delay(200).duration(1000).springify()}
-            className="w-full items-center"
+            entering={FadeInUp.delay(200).duration(1000)}
+            style={styles.header}
           >
-            <ThemedText type="title" className="mb-2 text-3xl font-bold text-pink-600">
-              Salão Amanda
-            </ThemedText>
-            <ThemedText className="mb-8 text-gray-500">
-              Realce sua beleza conosco
-            </ThemedText>
+            <Text style={styles.brandName}>AMANDA</Text>
+            <View style={styles.divider} />
+            <Text style={styles.brandSubtitle}>BEAUTY & CARE</Text>
           </Animated.View>
 
-          <View className="w-full">
-            {/* Animação 2: Inputs e Esqueci Senha */}
-            <Animated.View
-              entering={FadeInDown.delay(400).duration(1000).springify()}
-            >
+          <View style={styles.formCard}>
+            <Animated.View entering={FadeInDown.delay(400).duration(800)}>
+              <Text style={styles.label}>Bem-vinda de volta</Text>
+
               <TextInput
-                className="h-14 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 mb-4 text-base"
+                style={styles.input}
                 placeholder="E-mail"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor="#A0A0A0"
                 value={email}
                 onChangeText={setEmail}
-                keyboardType="email-address"
                 autoCapitalize="none"
               />
 
-              <TextInput
-                className="h-14 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 text-base"
-                placeholder="Senha"
-                placeholderTextColor="#9CA3AF"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Senha"
+                  placeholderTextColor="#A0A0A0"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!passwordVisible}
+                />
+                <TouchableOpacity
+                  onPress={() => setPasswordVisible(!passwordVisible)}
+                  style={styles.eyeButton}
+                >
+                  <Ionicons
+                    name={passwordVisible ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color="#999"
+                  />
+                </TouchableOpacity>
+              </View>
 
-              {/* Botão Esqueci Senha alinhado à direita */}
-              <TouchableOpacity
-                onPress={() => router.push("/forgot-password")}
-                className="items-end mt-2 mb-6"
-              >
-                <Text className="text-pink-600 font-medium">Esqueceu a senha?</Text>
+              <TouchableOpacity style={styles.forgotBtn} onPress={() => router.push("/forgot-password")}>
+                <Text style={styles.forgotText}>Esqueceu sua senha?</Text>
               </TouchableOpacity>
-            </Animated.View>
 
-            {/* Animação 3: Botão de Entrar e Cadastro */}
-            <Animated.View
-              entering={FadeInDown.delay(600).duration(1000).springify()}
-            >
               <TouchableOpacity
-                className="h-14 w-full items-center justify-center rounded-xl bg-pink-500 shadow-sm active:bg-pink-600"
+                style={styles.mainButton}
                 onPress={handleLogin}
-                disabled={loading} // Desabilita o botão durante o carregamento
+                disabled={loading}
               >
                 {loading ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color="#FFF" />
                 ) : (
-                  <Text className="text-lg font-bold text-white">Entrar</Text>
+                  <Text style={styles.buttonText}>ENTRAR</Text>
                 )}
               </TouchableOpacity>
-
-              <View className="flex-row items-center justify-center mt-8">
-                <ThemedText className="text-gray-600">Não tem uma conta? </ThemedText>
-                <Link href="/register" asChild>
-                  <TouchableOpacity>
-                    <Text className="font-bold text-pink-500">Cadastre-se</Text>
-                  </TouchableOpacity>
-                </Link>
-              </View>
             </Animated.View>
-
           </View>
+
+          <Animated.View
+            entering={FadeInDown.delay(600).duration(800)}
+            style={styles.footer}
+          >
+            <Text style={styles.footerText}>Ainda não tem conta?</Text>
+            <Link href="/register" asChild>
+              <TouchableOpacity>
+                <Text style={styles.signUpText}> Criar conta agora</Text>
+              </TouchableOpacity>
+            </Link>
+          </Animated.View>
         </KeyboardAvoidingView>
-      </ThemedView>
+      </View>
     </TouchableWithoutFeedback>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#FAFAFA', // Fundo levemente cinza/off-white
+  },
+  circleDecorator: {
+    position: 'absolute',
+    top: -100,
+    right: -50,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: '#FDF2F8', // Rosa claríssimo
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 30,
+    justifyContent: 'center',
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 60,
+  },
+  brandName: {
+    fontSize: 42,
+    fontWeight: '300', // Fonte fina para ser chique
+    letterSpacing: 8,
+    color: '#333',
+  },
+  divider: {
+    height: 1,
+    width: 40,
+    backgroundColor: '#DB2777',
+    marginVertical: 10,
+  },
+  brandSubtitle: {
+    fontSize: 12,
+    letterSpacing: 4,
+    color: '#DB2777',
+    fontWeight: '600',
+  },
+  formCard: {
+    width: '100%',
+  },
+  label: {
+    fontSize: 20,
+    color: '#444',
+    marginBottom: 25,
+    fontWeight: '500',
+    textAlign: 'center'
+  },
+  input: {
+    height: 50,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    marginBottom: 20,
+    fontSize: 16,
+    color: '#333',
+    paddingHorizontal: 5,
+  },
+  passwordContainer: {
+    position: 'relative',
+    marginBottom: 20,
+  },
+  passwordInput: {
+    height: 50,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+    fontSize: 16,
+    color: '#333',
+    paddingHorizontal: 5,
+    paddingRight: 40,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 5,
+    top: 15,
+  },
+  forgotBtn: {
+    alignItems: 'flex-end',
+    marginBottom: 40,
+  },
+  forgotText: {
+    color: '#999',
+    fontSize: 13,
+  },
+  mainButton: {
+    height: 55,
+    backgroundColor: '#1A1A1A', // Preto para contraste premium
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+  },
+  buttonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+    letterSpacing: 2,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 40,
+  },
+  footerText: {
+    color: '#666',
+  },
+  signUpText: {
+    color: '#DB2777',
+    fontWeight: 'bold',
+  },
+});
