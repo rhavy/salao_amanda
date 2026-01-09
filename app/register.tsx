@@ -3,7 +3,6 @@ import { Link, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -11,11 +10,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View
 } from "react-native";
 import MaskInput, { Masks } from 'react-native-mask-input';
 import Animated, { FadeInDown, FadeInRight } from 'react-native-reanimated';
+import { toast } from 'sonner-native';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -32,7 +31,7 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     if (!name || !email || !password) {
-      alert("Por favor, preencha pelo menos nome, e-mail e senha.");
+      toast.warning("Por favor, preencha pelo menos nome, e-mail e senha.");
       return;
     }
 
@@ -43,154 +42,152 @@ export default function RegisterScreen() {
         body: JSON.stringify({ name, email, password, gender, phone, cpf, birthDate }),
       });
 
-      alert(response.message || "Conta criada com sucesso!");
+      toast.success(response.message || "Conta criada com sucesso!");
       router.replace("/login");
     } catch (error: any) {
-      alert(error.message || "Erro ao criar conta");
+      toast.error(error.message || "Erro ao criar conta");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={styles.container}>
-        {/* Detalhe Decorativo */}
-        <View style={styles.circleDecorator} />
+    <View style={styles.container}>
+      {/* Detalhe Decorativo */}
+      <View style={styles.circleDecorator} />
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{ flex: 1 }}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
         >
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-          >
-            {/* Cabeçalho Minimalista */}
-            <Animated.View entering={FadeInDown.duration(1000).springify()} style={styles.header}>
-              <Text style={styles.brandName}>AMANDA</Text>
-              <View style={styles.divider} />
-              <Text style={styles.brandSubtitle}>CRIAR CONTA</Text>
+          {/* Cabeçalho Minimalista */}
+          <Animated.View entering={FadeInDown.duration(1000).springify()} style={styles.header}>
+            <Text style={styles.brandName}>AMANDA</Text>
+            <View style={styles.divider} />
+            <Text style={styles.brandSubtitle}>CRIAR CONTA</Text>
+          </Animated.View>
+
+          <View style={styles.form}>
+            {/* Seção 1 */}
+            <Animated.View entering={FadeInRight.delay(300)} style={styles.section}>
+              <Text style={styles.sectionLabel}>DADOS PESSOAIS</Text>
+
+              <TextInput
+                style={styles.input}
+                placeholder="Nome Completo"
+                placeholderTextColor="#A0A0A0"
+                value={name}
+                onChangeText={setName}
+              />
+
+              <MaskInput
+                style={styles.input}
+                placeholder="CPF"
+                placeholderTextColor="#A0A0A0"
+                keyboardType="numeric"
+                value={cpf}
+                onChangeText={setCpf}
+                mask={Masks.BRL_CPF}
+              />
+
+              <MaskInput
+                style={styles.input}
+                placeholder="Data de Nascimento"
+                placeholderTextColor="#A0A0A0"
+                keyboardType="numeric"
+                value={birthDate}
+                onChangeText={setBirthDate}
+                mask={Masks.DATE_DDMMYYYY}
+              />
+
+              {/* Seletor de Sexo Estilizado */}
+              <Text style={styles.innerLabel}>SEXO</Text>
+              <View style={styles.genderContainer}>
+                {["Feminino", "Masculino", "Outro"].map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    onPress={() => setGender(option as any)}
+                    style={[
+                      styles.genderButton,
+                      gender === option && styles.genderButtonActive
+                    ]}
+                  >
+                    <Text style={[
+                      styles.genderButtonText,
+                      gender === option && styles.genderButtonTextActive
+                    ]}>
+                      {option}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </Animated.View>
 
-            <View style={styles.form}>
-              {/* Seção 1 */}
-              <Animated.View entering={FadeInRight.delay(300)} style={styles.section}>
-                <Text style={styles.sectionLabel}>DADOS PESSOAIS</Text>
+            {/* Seção 2 */}
+            <Animated.View entering={FadeInRight.delay(500)} style={styles.section}>
+              <Text style={styles.sectionLabel}>CONTATO E SEGURANÇA</Text>
 
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nome Completo"
-                  placeholderTextColor="#A0A0A0"
-                  value={name}
-                  onChangeText={setName}
-                />
+              <MaskInput
+                style={styles.input}
+                placeholder="WhatsApp"
+                placeholderTextColor="#A0A0A0"
+                keyboardType="numeric"
+                value={phone}
+                onChangeText={setPhone}
+                mask={Masks.BRL_PHONE}
+              />
 
-                <MaskInput
-                  style={styles.input}
-                  placeholder="CPF"
-                  placeholderTextColor="#A0A0A0"
-                  keyboardType="numeric"
-                  value={cpf}
-                  onChangeText={setCpf}
-                  mask={Masks.BRL_CPF}
-                />
+              <TextInput
+                style={styles.input}
+                placeholder="Seu melhor E-mail"
+                placeholderTextColor="#A0A0A0"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
+              />
 
-                <MaskInput
-                  style={styles.input}
-                  placeholder="Data de Nascimento"
-                  placeholderTextColor="#A0A0A0"
-                  keyboardType="numeric"
-                  value={birthDate}
-                  onChangeText={setBirthDate}
-                  mask={Masks.DATE_DDMMYYYY}
-                />
+              <TextInput
+                style={styles.input}
+                placeholder="Crie uma senha forte"
+                placeholderTextColor="#A0A0A0"
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+              />
+            </Animated.View>
 
-                {/* Seletor de Sexo Estilizado */}
-                <Text style={styles.innerLabel}>SEXO</Text>
-                <View style={styles.genderContainer}>
-                  {["Feminino", "Masculino", "Outro"].map((option) => (
-                    <TouchableOpacity
-                      key={option}
-                      onPress={() => setGender(option as any)}
-                      style={[
-                        styles.genderButton,
-                        gender === option && styles.genderButtonActive
-                      ]}
-                    >
-                      <Text style={[
-                        styles.genderButtonText,
-                        gender === option && styles.genderButtonTextActive
-                      ]}>
-                        {option}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </Animated.View>
+            {/* Botão de Ação */}
+            <Animated.View entering={FadeInDown.delay(700)}>
+              <TouchableOpacity
+                style={[styles.mainButton, loading && { opacity: 0.7 }]}
+                onPress={handleRegister}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.buttonText}>FINALIZAR CADASTRO</Text>
+                )}
+              </TouchableOpacity>
 
-              {/* Seção 2 */}
-              <Animated.View entering={FadeInRight.delay(500)} style={styles.section}>
-                <Text style={styles.sectionLabel}>CONTATO E SEGURANÇA</Text>
-
-                <MaskInput
-                  style={styles.input}
-                  placeholder="WhatsApp"
-                  placeholderTextColor="#A0A0A0"
-                  keyboardType="numeric"
-                  value={phone}
-                  onChangeText={setPhone}
-                  mask={Masks.BRL_PHONE}
-                />
-
-                <TextInput
-                  style={styles.input}
-                  placeholder="Seu melhor E-mail"
-                  placeholderTextColor="#A0A0A0"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onChangeText={setEmail}
-                />
-
-                <TextInput
-                  style={styles.input}
-                  placeholder="Crie uma senha forte"
-                  placeholderTextColor="#A0A0A0"
-                  secureTextEntry
-                  value={password}
-                  onChangeText={setPassword}
-                />
-              </Animated.View>
-
-              {/* Botão de Ação */}
-              <Animated.View entering={FadeInDown.delay(700)}>
-                <TouchableOpacity
-                  style={[styles.mainButton, loading && { opacity: 0.7 }]}
-                  onPress={handleRegister}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.buttonText}>FINALIZAR CADASTRO</Text>
-                  )}
-                </TouchableOpacity>
-
-                <View style={styles.footer}>
-                  <Text style={styles.footerText}>Já possui conta? </Text>
-                  <Link href="/login" asChild>
-                    <TouchableOpacity>
-                      <Text style={styles.linkText}>Fazer Login</Text>
-                    </TouchableOpacity>
-                  </Link>
-                </View>
-              </Animated.View>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </View>
-    </TouchableWithoutFeedback>
+              <View style={styles.footer}>
+                <Text style={styles.footerText}>Já possui conta? </Text>
+                <Link href="/login" asChild>
+                  <TouchableOpacity>
+                    <Text style={styles.linkText}>Fazer Login</Text>
+                  </TouchableOpacity>
+                </Link>
+              </View>
+            </Animated.View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 

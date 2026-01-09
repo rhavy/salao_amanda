@@ -3,7 +3,6 @@ import { fetchAPI } from "@/services/api";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import {
-    Alert,
     Dimensions,
     Modal,
     Pressable,
@@ -14,6 +13,7 @@ import {
     View
 } from "react-native";
 import Animated, { SlideInUp } from "react-native-reanimated";
+import { toast } from 'sonner-native';
 
 interface ScheduleModalProps {
     visible: boolean;
@@ -57,7 +57,7 @@ export default function ScheduleModal({ visible, onClose, serviceName, servicePr
 
     const handleConfirm = async () => {
         if (selectedDate === null || !selectedTime) {
-            Alert.alert("Salão Amanda", "Por favor, escolha o dia e o horário.");
+            toast.warning("Por favor, escolha o dia e o horário.");
             return;
         }
 
@@ -66,7 +66,7 @@ export default function ScheduleModal({ visible, onClose, serviceName, servicePr
 
         try {
             if (!user?.email) {
-                Alert.alert("Erro", "Você precisa estar logada para agendar.");
+                toast.warning("Erro: Você precisa estar logado(a) para agendar.");
                 return;
             }
             const userEmail = user.email;
@@ -85,10 +85,10 @@ export default function ScheduleModal({ visible, onClose, serviceName, servicePr
                 }),
             });
 
-            Alert.alert("Sucesso", "Agendamento realizado com sucesso!");
+            toast.success("Agendamento realizado com sucesso!");
             onClose();
         } catch (error: any) {
-            Alert.alert("Erro", error.message || "Falha ao agendar");
+            toast.error(error.message || "Falha ao agendar");
         }
     };
 

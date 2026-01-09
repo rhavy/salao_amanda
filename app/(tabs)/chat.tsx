@@ -1,10 +1,11 @@
+import { Message } from "@/constants/types"; // Importar tipo centralizado
 import { useAuth } from "@/hooks/useAuth";
 import { fetchAPI } from "@/services/api";
+import { getSocket } from "@/services/socket"; // Importar socket
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-    ActivityIndicator,
     KeyboardAvoidingView,
     Platform,
     SafeAreaView,
@@ -16,13 +17,6 @@ import {
     View
 } from "react-native";
 
-interface Message {
-    id: number;
-    user_email: string;
-    sender: 'user' | 'admin';
-    content: string;
-    created_at: string;
-}
 
 export default function ChatScreen() {
     const { user } = useAuth();
@@ -30,14 +24,42 @@ export default function ChatScreen() {
     const [inputText, setInputText] = useState("");
     const [sending, setSending] = useState(false);
     const scrollViewRef = useRef<ScrollView>(null);
+    const socket = getSocket(); // Obter instância do socket
 
-    // Carregar mensagens periodicamente a cada 5 segundos
+    // Configurar Socket ao entrar na tela
+    useEffect(() => {
+        if (user?.email) {
+            // Conectar
+            if (!socket.connected) socket.connect();
+
+            // Entrar na sala do usuário
+            socket.emit('join_room', user.email);
+
+            // Ouvir novas mensagens (em tempo real)
+            socket.on('new_message', (newMessage: Message) => {
+                setMessages((prev) => {
+                    // Evitar duplicatas se já adicionamos otimisticamente (pelo ID ou conteúdo/tempo)
+                    // Aqui simplifico: adiciona se ID for diferente dos existentes
+                    if (!prev.find(m => m.id === newMessage.id)) {
+                        return [...prev, newMessage];
+                    }
+                    return prev;
+                });
+                // Scroll para baixo ao receber
+                setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+            });
+
+            return () => {
+                socket.off('new_message');
+            };
+        }
+    }, [user, socket]);
+
+    // Carregar histórico inicial (apenas uma vez ao focar)
     useFocusEffect(
         useCallback(() => {
             if (user) {
                 loadMessages();
-                const interval = setInterval(loadMessages, 5000);
-                return () => clearInterval(interval);
             }
         }, [user])
     );
@@ -46,8 +68,8 @@ export default function ChatScreen() {
         if (!user?.email) return;
         try {
             const data = await fetchAPI(`/chat/${user.email}`);
-            // Verificar se houve mudança para evitar re-render desnecessário (opcional)
             setMessages(data);
+            setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: false }), 200);
         } catch (error) {
             console.error("Erro ao carregar chat", error);
         }
@@ -56,46 +78,40 @@ export default function ChatScreen() {
     const handleSend = async () => {
         if (!inputText.trim() || !user?.email) return;
 
+        const tempId = Date.now();
+        const content = inputText.trim();
+
+        // 1. Emitir via Socket (Real-time)
+        socket.emit('send_message', {
+            email: user.email,
+            content: content,
+            sender: 'user'
+        });
+
+        // 2. Update Otimista na UI
         const tempMessage: Message = {
-            id: Date.now(), // ID temporário
+            id: tempId,
             user_email: user.email,
             sender: 'user',
-            content: inputText,
+            content: content,
             created_at: new Date().toISOString()
         };
 
-        // UI Optimistic Update
         setMessages(prev => [...prev, tempMessage]);
         setInputText("");
-        setSending(true);
 
-        // Scroll para baixo
+        // Scroll
         setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-
-        try {
-            await fetchAPI('/chat', {
-                method: 'POST',
-                body: JSON.stringify({
-                    email: user.email,
-                    content: tempMessage.content,
-                    sender: 'user'
-                })
-            });
-            // Recarrega para pegar o ID real e garantir sincronia
-            loadMessages();
-        } catch (error) {
-            console.error(error);
-            // Opção: mostrar erro na mensagem
-        } finally {
-            setSending(false);
-        }
     };
 
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>Fale Conosco</Text>
-                <Text style={styles.headerSubtitle}>Respondemos em instantes</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' }} />
+                    <Text style={styles.headerSubtitle}>Online (WebSocket)</Text>
+                </View>
             </View>
 
             <ScrollView
@@ -121,7 +137,7 @@ export default function ChatScreen() {
                                 )}
                                 <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAdmin]}>
                                     <Text style={[styles.messageText, isUser ? styles.textUser : styles.textAdmin]}>{msg.content}</Text>
-                                    <Text style={[styles.timeText, isUser ? styles.timeUser : styles.timeAdmin]}>
+                                    <Text style={[styles.timeText, isUser ? styles.timeTextUser : styles.timeTextAdmin]}>
                                         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </Text>
                                 </View>
@@ -146,13 +162,9 @@ export default function ChatScreen() {
                 <TouchableOpacity
                     style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
                     onPress={handleSend}
-                    disabled={!inputText.trim() || sending}
+                    disabled={!inputText.trim()}
                 >
-                    {sending ? (
-                        <ActivityIndicator color="#FFF" size="small" />
-                    ) : (
-                        <Ionicons name="send" size={20} color="#FFF" />
-                    )}
+                    <Ionicons name="send" size={20} color="#FFF" />
                 </TouchableOpacity>
             </KeyboardAvoidingView>
         </SafeAreaView>
@@ -207,8 +219,8 @@ const styles = StyleSheet.create({
     textUser: { color: '#FFF' },
     textAdmin: { color: '#1F2937' },
     timeText: { fontSize: 9, marginTop: 4, alignSelf: 'flex-end' },
-    timeUser: { color: 'rgba(255,255,255,0.7)' },
-    timeAdmin: { color: '#9CA3AF' },
+    timeTextUser: { color: 'rgba(255,255,255,0.7)' },
+    timeTextAdmin: { color: '#9CA3AF' },
     inputContainer: {
         flexDirection: 'row',
         padding: 10,

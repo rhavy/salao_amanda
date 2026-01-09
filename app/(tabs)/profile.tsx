@@ -1,3 +1,4 @@
+import { UserProfile } from "@/constants/types"; // Importar tipo centralizado
 import { useAuth } from "@/hooks/useAuth";
 import { fetchAPI } from "@/services/api";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,7 +26,8 @@ export default function ProfileScreen() {
     const router = useRouter();
     const { user, logout } = useAuth();
 
-    const [profileData, setProfileData] = useState<ReturnType<typeof useAuth>['user']>(null);
+    // Tipagem correta para o perfil
+    const [profileData, setProfileData] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
 
@@ -62,12 +64,12 @@ export default function ProfileScreen() {
             const data = await fetchAPI(`/user/profile/${user.email}`);
             setProfileData(data);
 
-            // Atualizar settings com dados do banco
+            // Atualizar settings com dados do banco (agora tipados)
             if (data) {
                 setSettings({
-                    notifications_reminders: !!(data as any).notifications_reminders,
-                    notifications_marketing: !!(data as any).notifications_marketing,
-                    privacy_use_photos: !!(data as any).privacy_use_photos
+                    notifications_reminders: !!data.notifications_reminders,
+                    notifications_marketing: !!data.notifications_marketing,
+                    privacy_use_photos: !!data.privacy_use_photos
                 });
             }
         } catch (error) {
@@ -81,7 +83,7 @@ export default function ProfileScreen() {
     const handleOpenEdit = () => {
         if (profileData) {
             setEditName(profileData.name || "");
-            setEditPhone((profileData as any).phone || "");
+            setEditPhone(profileData.phone || "");
             setEditModalVisible(true);
         }
     };

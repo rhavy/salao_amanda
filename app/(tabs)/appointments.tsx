@@ -1,3 +1,4 @@
+import { Appointment } from "@/constants/types"; // Importar tipo centralizado
 import { useAuth } from "@/hooks/useAuth"; // Importa o hook de autenticação
 import { fetchAPI } from "@/services/api";
 import { requestNotificationPermission, scheduleReminders } from "@/services/notifications"; // Importar serviço
@@ -16,15 +17,8 @@ import {
     View,
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import { toast } from 'sonner-native';
 
-interface Appointment {
-    id: string;
-    serviceName: string;
-    date: string;
-    time: string;
-    status: 'confirmado' | 'pendente' | 'concluido';
-    price: number;
-}
 
 export default function AppointmentsScreen() {
     const { user } = useAuth(); // Obtém o usuário para garantir que a busca só ocorra se logado
@@ -87,10 +81,10 @@ export default function AppointmentsScreen() {
                 text: "Sim", style: "destructive", onPress: async () => {
                     try {
                         await fetchAPI(`/appointments/${id}`, { method: 'DELETE' });
-                        Alert.alert("Sucesso", "Agendamento cancelado.");
+                        toast.success("Agendamento cancelado."); // Usar toast para sucesso
                         loadAppointments(); // Recarrega a lista
                     } catch (error) {
-                        Alert.alert("Erro", "Não foi possível cancelar.");
+                        toast.error("Não foi possível cancelar."); // Usar toast para erro
                     }
                 }
             }
@@ -181,7 +175,7 @@ export default function AppointmentsScreen() {
                 <FlashList
                     data={filteredData}
                     renderItem={renderItem}
-                    // estimatedItemSize={120}
+                    // estimatedItemSize={150}
                     keyExtractor={(item) => item.id}
                     contentContainerStyle={{ paddingBottom: 20 }}
                     refreshControl={

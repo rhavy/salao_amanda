@@ -5,18 +5,16 @@ import { Link, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
-  Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View
 } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import { toast } from 'sonner-native';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -29,7 +27,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert("Atenção", "Por favor, preencha todos os campos.");
+      toast.warning("Por favor, preencha todos os campos.");
       return;
     }
 
@@ -45,105 +43,102 @@ export default function LoginScreen() {
       // Isso permitirá que o app continue, mas as rotas protegidas por token falharão.
       if (response.user) {
         await saveUser({ user: response.user, token: null }); // Token é null
+        toast.success(`Bem-vinda de volta, ${response.user.name || 'Cliente'}!`);
         router.replace("/(tabs)");
       } else {
         throw new Error("Resposta da API de login inválida: 'user' não encontrado.");
       }
 
     } catch (error: any) {
-      Alert.alert("Erro no Login", error.message || "Não foi possível entrar. Verifique suas credenciais.");
+      toast.error(error.message || "Não foi possível entrar. Verifique suas credenciais.");
     } finally {
       setLoading(false);
     }
   };
 
-
-
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-      <View style={styles.container}>
-        {/* Detalhe Decorativo de Fundo */}
-        <View style={styles.circleDecorator} />
+    <View style={styles.container}>
+      {/* Detalhe Decorativo de Fundo */}
+      <View style={styles.circleDecorator} />
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.content}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.content}
+      >
+        <Animated.View
+          entering={FadeInUp.delay(200).duration(1000)}
+          style={styles.header}
         >
-          <Animated.View
-            entering={FadeInUp.delay(200).duration(1000)}
-            style={styles.header}
-          >
-            <Text style={styles.brandName}>AMANDA</Text>
-            <View style={styles.divider} />
-            <Text style={styles.brandSubtitle}>BEAUTY & CARE</Text>
-          </Animated.View>
+          <Text style={styles.brandName}>AMANDA</Text>
+          <View style={styles.divider} />
+          <Text style={styles.brandSubtitle}>BEAUTY & CARE</Text>
+        </Animated.View>
 
-          <View style={styles.formCard}>
-            <Animated.View entering={FadeInDown.delay(400).duration(800)}>
-              <Text style={styles.label}>Bem-vinda de volta</Text>
+        <View style={styles.formCard}>
+          <Animated.View entering={FadeInDown.delay(400).duration(800)}>
+            <Text style={styles.label}>Bem-vinda de volta</Text>
 
+            <TextInput
+              style={styles.input}
+              placeholder="E-mail"
+              placeholderTextColor="#A0A0A0"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+            />
+
+            <View style={styles.passwordContainer}>
               <TextInput
-                style={styles.input}
-                placeholder="E-mail"
+                style={styles.passwordInput}
+                placeholder="Senha"
                 placeholderTextColor="#A0A0A0"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!passwordVisible}
               />
-
-              <View style={styles.passwordContainer}>
-                <TextInput
-                  style={styles.passwordInput}
-                  placeholder="Senha"
-                  placeholderTextColor="#A0A0A0"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!passwordVisible}
-                />
-                <TouchableOpacity
-                  onPress={() => setPasswordVisible(!passwordVisible)}
-                  style={styles.eyeButton}
-                >
-                  <Ionicons
-                    name={passwordVisible ? "eye-off-outline" : "eye-outline"}
-                    size={20}
-                    color="#999"
-                  />
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity style={styles.forgotBtn} onPress={() => router.push("/forgot-password")}>
-                <Text style={styles.forgotText}>Esqueceu sua senha?</Text>
-              </TouchableOpacity>
-
               <TouchableOpacity
-                style={styles.mainButton}
-                onPress={handleLogin}
-                disabled={loading}
+                onPress={() => setPasswordVisible(!passwordVisible)}
+                style={styles.eyeButton}
               >
-                {loading ? (
-                  <ActivityIndicator color="#FFF" />
-                ) : (
-                  <Text style={styles.buttonText}>ENTRAR</Text>
-                )}
+                <Ionicons
+                  name={passwordVisible ? "eye-off-outline" : "eye-outline"}
+                  size={20}
+                  color="#999"
+                />
               </TouchableOpacity>
-            </Animated.View>
-          </View>
+            </View>
 
-          <Animated.View
-            entering={FadeInDown.delay(600).duration(800)}
-            style={styles.footer}
-          >
-            <Text style={styles.footerText}>Ainda não tem conta?</Text>
-            <Link href="/register" asChild>
-              <TouchableOpacity>
-                <Text style={styles.signUpText}> Criar conta agora</Text>
-              </TouchableOpacity>
-            </Link>
+            <TouchableOpacity style={styles.forgotBtn} onPress={() => router.push("/forgot-password")}>
+              <Text style={styles.forgotText}>Esqueceu sua senha?</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.mainButton}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={styles.buttonText}>ENTRAR</Text>
+              )}
+            </TouchableOpacity>
           </Animated.View>
-        </KeyboardAvoidingView>
-      </View>
-    </TouchableWithoutFeedback>
+        </View>
+
+        <Animated.View
+          entering={FadeInDown.delay(600).duration(800)}
+          style={styles.footer}
+        >
+          <Text style={styles.footerText}>Ainda não tem conta?</Text>
+          <Link href="/register" asChild>
+            <TouchableOpacity>
+              <Text style={styles.signUpText}> Criar conta agora</Text>
+            </TouchableOpacity>
+          </Link>
+        </Animated.View>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
