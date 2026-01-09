@@ -40,7 +40,9 @@ export async function fetchAPI(endpoint: string, options: RequestInit = {}) {
         const data = await response.json();
 
         if (!response.ok) {
-            throw new Error(data.message || 'Erro na requisição');
+            // Prioriza `error` (comum no backend) ou `message`, senão usa texto genérico
+            const errorMessage = data.error || data.message || `Erro ${response.status}: Falha na requisição`;
+            throw new Error(errorMessage);
         }
 
         return data;

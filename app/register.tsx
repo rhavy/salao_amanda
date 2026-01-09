@@ -1,4 +1,5 @@
 import { fetchAPI } from "@/services/api";
+import { Ionicons } from "@expo/vector-icons";
 import { Link, useRouter } from "expo-router";
 import { useState } from "react";
 import {
@@ -27,6 +28,7 @@ export default function RegisterScreen() {
   const [birthDate, setBirthDate] = useState("");
   const [gender, setGender] = useState<"Feminino" | "Masculino" | "Outro" | "">("");
   const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
@@ -151,14 +153,26 @@ export default function RegisterScreen() {
                 onChangeText={setEmail}
               />
 
-              <TextInput
-                style={styles.input}
-                placeholder="Crie uma senha forte"
-                placeholderTextColor="#A0A0A0"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-              />
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Crie uma senha forte"
+                  placeholderTextColor="#A0A0A0"
+                  secureTextEntry={!passwordVisible}
+                  value={password}
+                  onChangeText={setPassword}
+                />
+                <TouchableOpacity
+                  onPress={() => setPasswordVisible(!passwordVisible)}
+                  style={styles.eyeButton}
+                >
+                  <Ionicons
+                    name={passwordVisible ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color="#999"
+                  />
+                </TouchableOpacity>
+              </View>
             </Animated.View>
 
             {/* Botão de Ação */}
@@ -258,6 +272,23 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     fontSize: 15,
     color: '#333',
+  },
+  passwordContainer: {
+    position: 'relative',
+    marginBottom: 15,
+  },
+  passwordInput: {
+    height: 50,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEE',
+    fontSize: 15,
+    color: '#333',
+    paddingRight: 40,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 5,
+    top: 15,
   },
   genderContainer: {
     flexDirection: 'row',
