@@ -1,7 +1,7 @@
 import { fetchAPI, getServices, getCategories, Service, Category } from "@/services/api";
 import { Ionicons } from "@expo/vector-icons";
 import { FlashList, ListRenderItem } from "@shopify/flash-list";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import useAuth from "@/hooks/useAuth"; // Added back useAuth import
 import {
   ActivityIndicator,
@@ -14,6 +14,8 @@ import {
   View
 } from "react-native";
 import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
+import { RefreshControl } from "react-native-gesture-handler";
+import ScheduleModal from "@/components/schedule";
 
 export default function ServicesScreen() {
   const { user } = useAuth();
@@ -40,7 +42,7 @@ export default function ServicesScreen() {
       setCategories(Array.isArray(categoriesData) ? categoriesData : []);
 
       if (categoriesData.length > 0 && selectedCategoryId === undefined) {
-          setSelectedCategoryId(null); // 'Todos' option
+        setSelectedCategoryId(null); // 'Todos' option
       }
 
     } catch (error) {

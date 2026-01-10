@@ -1,5 +1,5 @@
 import { TabBarIcon } from "@/components/navigation/TabBarIcon";
-import { useAuth } from "@/hooks/useAuth"; // Importa o hook de autenticação
+import useAuth from "@/hooks/useAuth"; // Importa o hook de autenticação
 import { LinearGradient } from 'expo-linear-gradient';
 import { Tabs } from "expo-router";
 import React from "react"; // Removido useEffect, useState

@@ -1,4 +1,4 @@
-import { useAuth } from "@/hooks/useAuth";
+import useAuth from "@/hooks/useAuth";
 import { fetchAPI } from "@/services/api";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
