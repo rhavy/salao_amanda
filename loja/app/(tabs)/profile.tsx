@@ -1,6 +1,6 @@
 import { UserProfile } from "@/constants/types"; // Importar tipo centralizado
 import useAuth from "@/hooks/useAuth";
-import { fetchAPI } from "@/services/api";
+import { fetchAPI, uploadAvatar, BASE_URL, changePassword } from "@/services/api";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from "expo-router";
@@ -21,6 +21,8 @@ import {
     View
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import { toast } from "sonner-native";
+import MaskInput, { Masks } from "react-native-mask-input";
 
 export default function ProfileScreen() {
     const router = useRouter();
@@ -39,7 +41,17 @@ export default function ProfileScreen() {
     // Estados para Modais de Configurações
     const [notifModalVisible, setNotifModalVisible] = useState(false);
     const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
-
+    // Estados para o Modal de Mudança de Senha
+    const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+    const [currentPassword, setCurrentPassword] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmNewPassword, setConfirmNewPassword] = useState("");
+    const [isChangingPassword, setIsChangingPassword] = useState(false);
+    // Estados para visibilidade das senhas
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
+    
     // Estados dos Toggles (Iniciados com valores padrão, atualizados no loadProfile)
     const [settings, setSettings] = useState({
         notifications_reminders: true,
@@ -52,6 +64,41 @@ export default function ProfileScreen() {
             loadProfile();
         }
     }, [user]);
+
+    const handleChangePassword = async () => {
+        if (!user?.email) {
+            Alert.alert("Erro", "Usuário não identificado.");
+            return;
+        }
+
+        if (!currentPassword || !newPassword || !confirmNewPassword) {
+            toast.error("Por favor, preencha todos os campos de senha.");
+            return;
+        }
+        if (newPassword !== confirmNewPassword) {
+            toast.error("A nova senha e a confirmação não coincidem.");
+            return;
+        }
+        if (newPassword.length < 6) { // Exemplo de validação de força
+            toast.error("A nova senha deve ter pelo menos 6 caracteres.");
+            return;
+        }
+
+        setIsChangingPassword(true);
+        try {
+            await changePassword(user.email, currentPassword, newPassword);
+            toast.success("Senha alterada com sucesso!");
+            setPasswordModalVisible(false);
+            setCurrentPassword("");
+            setNewPassword("");
+            setConfirmNewPassword("");
+        } catch (error: any) {
+            console.error("Erro ao alterar senha:", error);
+            toast.error(error.message || "Erro ao alterar a senha.");
+        } finally {
+            setIsChangingPassword(false);
+        }
+    };
 
     const loadProfile = async () => {
         if (!user?.email) {
@@ -130,6 +177,11 @@ export default function ProfileScreen() {
     };
 
     const handlePickImage = async () => {
+        if (!user?.email) {
+            Alert.alert("Erro", "Usuário não identificado para o upload.");
+            return;
+        }
+
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
             Alert.alert("Permissão negada", "Precisamos de acesso às suas fotos para mudar o avatar.");
@@ -143,13 +195,36 @@ export default function ProfileScreen() {
             quality: 0.5,
         });
 
-        if (!result.canceled) {
+        if (!result.canceled && result.assets && result.assets.length > 0) {
             setUploading(true);
-            // Simulação de upload. Em um app real, aqui iria a chamada para a API de upload.
-            setTimeout(() => {
-                setProfileData(prev => prev ? { ...prev, avatar: result.assets[0].uri } : null);
+            const asset = result.assets[0];
+            const formData = new FormData();
+
+            // O 'uri' no React Native é o caminho local do arquivo.
+            // O nome do arquivo pode ser extraído do URI.
+            const uriParts = asset.uri.split('/');
+            const fileName = uriParts[uriParts.length - 1];
+            
+            // Adiciona a imagem ao FormData
+            formData.append('avatar', {
+                uri: asset.uri,
+                name: fileName,
+                type: asset.type || 'image/jpeg', // O tipo pode ser inferido ou padrão
+            } as any);
+            
+            // Adiciona o email do usuário
+            formData.append('email', user.email);
+
+            try {
+                const data = await uploadAvatar(formData);
+                // Atualiza o avatar no estado local com a URL completa do servidor
+                setProfileData(prev => prev ? { ...prev, avatar: `${BASE_URL}${data.avatarUrl}` } : null);
+                toast.success("Avatar atualizado com sucesso!");
+            } catch (error: any) {
+                Alert.alert("Erro de Upload", error.message || "Não foi possível enviar a imagem.");
+            } finally {
                 setUploading(false);
-            }, 1500);
+            }
         }
     };
 
@@ -170,7 +245,7 @@ export default function ProfileScreen() {
     const MenuItem = ({ icon, title, subtitle, onPress, isDestructive = false }: any) => (
         <TouchableOpacity onPress={onPress} style={styles.menuItem}>
             <View style={[styles.menuIconWrapper, isDestructive && styles.menuIconDestructive]}>
-                <Ionicons name={icon} size={20} color={isDestructive ? "#EF4444" : "#DB2777"} />
+                <Ionicons name={icon} size={20} color={isDestructive ? "#EF4444" : "#ec4899"} />
             </View>
             <View style={styles.menuTextContainer}>
                 <Text style={[styles.menuTitle, isDestructive && styles.destructiveText]}>{title}</Text>
@@ -199,7 +274,13 @@ export default function ProfileScreen() {
                             {uploading ? (
                                 <ActivityIndicator color="#DB2777" />
                             ) : (
-                                <Image source={{ uri: profileData?.avatar }} style={styles.avatarImage} />
+                                profileData?.avatar ? (
+                                    <Image source={{ uri: profileData.avatar }} style={styles.avatarImage} />
+                                ) : (
+                                    <View style={styles.avatarPlaceholder}>
+                                        <Ionicons name="person" size={40} color="#E5E7EB" />
+                                    </View>
+                                )
                             )}
                         </View>
                         <TouchableOpacity style={styles.cameraButton} onPress={handlePickImage}>
@@ -250,6 +331,11 @@ export default function ProfileScreen() {
                         onPress={() => setPrivacyModalVisible(true)}
                     />
                     <MenuItem
+                        icon="lock-closed-outline"
+                        title="Mudar Senha"
+                        onPress={() => setPasswordModalVisible(true)}
+                    />
+                    <MenuItem
                         icon="log-out-outline"
                         title="Sair da Conta"
                         isDestructive={true}
@@ -291,12 +377,13 @@ export default function ProfileScreen() {
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>TELEFONE / WHATSAPP</Text>
-                            <TextInput
+                            <MaskInput
                                 style={styles.input}
                                 value={editPhone}
                                 onChangeText={setEditPhone}
                                 placeholder="(XX) XXXXX-XXXX"
                                 keyboardType="phone-pad"
+                                mask={Masks.BRL_PHONE}
                             />
                         </View>
 
@@ -348,7 +435,7 @@ export default function ProfileScreen() {
                             <View style={styles.toggleText}>
                                 <Text style={styles.toggleLabel}>Promoções e Novidades</Text>
                                 <Text style={styles.toggleDesc}>Fique por dentro de ofertas exclusivas.</Text>
-                            </View>
+                            </Text>
                             <Switch
                                 trackColor={{ false: "#E5E7EB", true: "#DB2777" }}
                                 thumbColor={"#FFF"}
@@ -390,6 +477,88 @@ export default function ProfileScreen() {
                         </View>
                     </View>
                 </View>
+            </Modal>
+
+            {/* Modal de Mudança de Senha */}
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={passwordModalVisible}
+                onRequestClose={() => setPasswordModalVisible(false)}
+            >
+                <KeyboardAvoidingView
+                    behavior={Platform.OS === "ios" ? "padding" : "height"}
+                    style={styles.modalOverlay}
+                >
+                    <View style={styles.modalContent}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Mudar Senha</Text>
+                            <TouchableOpacity onPress={() => setPasswordModalVisible(false)}>
+                                <Ionicons name="close" size={24} color="#333" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>SENHA ATUAL</Text>
+                            <View style={styles.passwordInputContainer}>
+                                <TextInput
+                                    style={styles.input}
+                                    value={currentPassword}
+                                    onChangeText={setCurrentPassword}
+                                    placeholder="******"
+                                    secureTextEntry={!showCurrentPassword}
+                                />
+                                <TouchableOpacity onPress={() => setShowCurrentPassword(!showCurrentPassword)} style={styles.passwordToggleBtn}>
+                                    <Ionicons name={showCurrentPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#999" />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>NOVA SENHA</Text>
+                            <View style={styles.passwordInputContainer}>
+                                <TextInput
+                                    style={styles.input}
+                                    value={newPassword}
+                                    onChangeText={setNewPassword}
+                                    placeholder="******"
+                                    secureTextEntry={!showNewPassword}
+                                />
+                                <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)} style={styles.passwordToggleBtn}>
+                                    <Ionicons name={showNewPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#999" />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>CONFIRMAR NOVA SENHA</Text>
+                            <View style={styles.passwordInputContainer}>
+                                <TextInput
+                                    style={styles.input}
+                                    value={confirmNewPassword}
+                                    onChangeText={setConfirmNewPassword}
+                                    placeholder="******"
+                                    secureTextEntry={!showConfirmNewPassword}
+                                />
+                                <TouchableOpacity onPress={() => setShowConfirmNewPassword(!showConfirmNewPassword)} style={styles.passwordToggleBtn}>
+                                    <Ionicons name={showConfirmNewPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#999" />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            style={styles.saveButton}
+                            onPress={handleChangePassword}
+                            disabled={isChangingPassword}
+                        >
+                            {isChangingPassword ? (
+                                <ActivityIndicator color="#FFF" />
+                            ) : (
+                                <Text style={styles.saveButtonText}>SALVAR NOVA SENHA</Text>
+                            )}
+                        </TouchableOpacity>
+                    </View>
+                </KeyboardAvoidingView>
             </Modal>
         </View>
     );
@@ -443,6 +612,21 @@ const styles = StyleSheet.create({
         padding: 15,
         fontSize: 16,
         color: '#1A1A1A',
+        flex: 1, // Permite que o TextInput ocupe o espaço restante
+        paddingRight: 50, // Espaço para o botão do toggle
+    },
+    passwordInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 8,
+    },
+    passwordToggleBtn: {
+        position: 'absolute',
+        right: 15,
+        padding: 5,
     },
     saveButton: {
         backgroundColor: '#DB2777',
@@ -490,6 +674,13 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         justifyContent: 'center',
         alignItems: 'center'
+    },
+    avatarPlaceholder: {
+        width: '100%',
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#F9FAFB',
     },
     avatarImage: { width: '100%', height: '100%' },
     cameraButton: {

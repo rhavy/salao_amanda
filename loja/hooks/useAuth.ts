@@ -1,15 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState } from 'react';
+import { UserProfile } from '@/constants/types'; // Import UserProfile
 
-interface User {
+interface User extends UserProfile { // Estende UserProfile
     id?: string;
-    email: string;
-    name: string;
-    avatar?: string;
+    // Removendo campos duplicados que já estão em UserProfile
+    // email: string;
+    // name: string;
+    // avatar?: string;
     gender?: 'Masculino' | 'Feminino' | 'Outro';
-    // Propriedades da UserProfile agora fazem parte do User
-    appointmentsCount?: number;
-    memberSince?: string;
+    // appointmentsCount?: number;
+    // memberSince?: string;
 }
 
 interface AuthData {
