@@ -22,6 +22,7 @@ import {
 } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { toast } from "sonner-native";
+import MaskInput, { Masks } from "react-native-mask-input";
 
 export default function ProfileScreen() {
     const router = useRouter();
@@ -372,12 +373,13 @@ export default function ProfileScreen() {
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>TELEFONE / WHATSAPP</Text>
-                            <TextInput
+                            <MaskInput
                                 style={styles.input}
                                 value={editPhone}
                                 onChangeText={setEditPhone}
                                 placeholder="(XX) XXXXX-XXXX"
                                 keyboardType="phone-pad"
+                                mask={Masks.BRL_PHONE}
                             />
                         </View>
 
