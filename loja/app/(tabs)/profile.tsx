@@ -1,5 +1,5 @@
 import { UserProfile } from "@/constants/types"; // Importar tipo centralizado
-import { useAuth } from "@/hooks/useAuth";
+import useAuth from "@/hooks/useAuth";
 import { fetchAPI } from "@/services/api";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from 'expo-image-picker';

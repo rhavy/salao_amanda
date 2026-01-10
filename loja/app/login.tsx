@@ -1,4 +1,4 @@
-import { useAuth } from "@/hooks/useAuth";
+import useAuth from "@/hooks/useAuth";
 import { fetchAPI } from "@/services/api"; // Importa o fetchAPI
 import { Ionicons } from "@expo/vector-icons";
 import { Link, useRouter } from "expo-router";

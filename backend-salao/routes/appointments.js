@@ -76,4 +76,20 @@ router.delete('/:id', async (req, res) => {
     }
 });
 
+// Rota para buscar horários ocupados em uma data específica
+router.get('/by-date/:date', async (req, res) => {
+    const { date } = req.params;
+    try {
+        // Retorna apenas os horários de agendamentos que NÃO estão cancelados.
+        const [rows] = await db.query(
+            "SELECT time FROM appointments WHERE date = ? AND status <> 'cancelado'",
+            [date]
+        );
+        res.json(rows);
+    } catch (error) {
+        console.error('Erro ao buscar horários por data:', error);
+        res.status(500).json({ error: 'Erro ao buscar horários por data' });
+    }
+});
+
 module.exports = router;

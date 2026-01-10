@@ -115,16 +115,16 @@ async function runMigrations() {
         connection = await db.getConnection();
         console.log("✅ Conexão com o banco estabelecida.");
 
-        // --- COMEÇO: Dropping tables (DESTRUTIVO) ---
-        console.log("🗑️ Apagando tabelas existentes (se houver) para recriação...");
-        // Drop tables in reverse order of dependencies
-        const reverseTableOrder = [...tableOrder].reverse(); // Make a copy and reverse
-        for (const tableName of reverseTableOrder) {
-            console.log(`- Apagando tabela [${tableName}]...`);
-            await connection.query(`DROP TABLE IF EXISTS ${tableName}`);
-        }
-        console.log("🗑️ Todas as tabelas existentes foram apagadas.");
-        // --- FIM: Dropping tables ---
+        // // --- COMEÇO: Dropping tables (DESTRUTIVO) ---
+        // console.log("🗑️ Apagando tabelas existentes (se houver) para recriação...");
+        // // Drop tables in reverse order of dependencies
+        // const reverseTableOrder = [...tableOrder].reverse(); // Make a copy and reverse
+        // for (const tableName of reverseTableOrder) {
+        //     console.log(`- Apagando tabela [${tableName}]...`);
+        //     await connection.query(`DROP TABLE IF EXISTS ${tableName}`);
+        // }
+        // console.log("🗑️ Todas as tabelas existentes foram apagadas.");
+        // // --- FIM: Dropping tables ---
 
 
         // Loop through tables in the defined order (creation)

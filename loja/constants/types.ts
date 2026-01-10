@@ -17,7 +17,7 @@ export interface Appointment {
     serviceName: string;
     date: string;
     time: string;
-    status: 'confirmado' | 'pendente' | 'concluido';
+    status: 'confirmado' | 'pendente' | 'concluido' | 'cancelado';
     price: number;
     user_email: string;
 }

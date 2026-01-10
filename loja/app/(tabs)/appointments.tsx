@@ -1,5 +1,5 @@
 import { Appointment } from "@/constants/types"; // Importar tipo centralizado
-import { useAuth } from "@/hooks/useAuth"; // Importa o hook de autenticação
+import useAuth from "@/hooks/useAuth"; // Importa o hook de autenticação
 import { fetchAPI } from "@/services/api";
 import { requestNotificationPermission, scheduleReminders } from "@/services/notifications"; // Importar serviço
 import { Ionicons } from "@expo/vector-icons";
@@ -80,7 +80,7 @@ export default function AppointmentsScreen() {
             {
                 text: "Sim", style: "destructive", onPress: async () => {
                     try {
-                        await fetchAPI(`/appointments/${id}`, { method: 'DELETE' });
+                        await fetchAPI(`/appointments/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelado' }) });
                         toast.success("Agendamento cancelado."); // Usar toast para sucesso
                         loadAppointments(); // Recarrega a lista
                     } catch (error) {
@@ -96,11 +96,12 @@ export default function AppointmentsScreen() {
         const todayString = today.toISOString().split('T')[0]; // Comparação por string YYYY-MM-DD evita fuso
 
         return appointments.filter(item => {
-            // item.date já vem como YYYY-MM-DD do backend
+            const isFinished = item.status === 'concluido' || item.status === 'cancelado';
+            
             if (filter === 'proximos') {
-                return item.date >= todayString;
-            } else {
-                return item.date < todayString;
+                return item.date >= todayString && !isFinished;
+            } else { // 'passados'
+                return item.date < todayString || isFinished;
             }
         });
     }, [filter, appointments]);
@@ -110,6 +111,7 @@ export default function AppointmentsScreen() {
             confirmado: { bg: '#ECFDF5', text: '#10B981' },
             pendente: { bg: '#FFFBEB', text: '#F59E0B' },
             concluido: { bg: '#F3F4F6', text: '#6B7280' },
+            cancelado: { bg: '#FEE2E2', text: '#EF4444' }, // Adicionado para status 'cancelado'
         };
         const current = colors[status as keyof typeof colors];
 
@@ -145,6 +147,7 @@ export default function AppointmentsScreen() {
                 <TouchableOpacity
                     style={styles.cancelButton}
                     onPress={() => handleCancel(item.id)}
+                    disabled={item.status === 'cancelado'}
                 >
                     <Text style={styles.cancelButtonText}>CANCELAR</Text>
                 </TouchableOpacity>

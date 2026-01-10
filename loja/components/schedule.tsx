@@ -3,6 +3,7 @@ import { fetchAPI } from "@/services/api";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import {
+    ActivityIndicator,
     Dimensions,
     Modal,
     Pressable,
@@ -23,11 +24,13 @@ interface ScheduleModalProps {
 }
 
 export default function ScheduleModal({ visible, onClose, serviceName, servicePrice }: ScheduleModalProps) {
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
     const [selectedDate, setSelectedDate] = useState<number | null>(null);
     const [selectedTime, setSelectedTime] = useState<string | null>(null);
     const [availableDays, setAvailableDays] = useState<string[]>([]);
     const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
+    const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+    const [loadingTimes, setLoadingTimes] = useState(false);
 
     useEffect(() => {
         if (visible) {
@@ -36,8 +39,43 @@ export default function ScheduleModal({ visible, onClose, serviceName, servicePr
             // Limpar seleções ao fechar
             setSelectedDate(null);
             setSelectedTime(null);
+            setBookedSlots([]);
         }
     }, [visible]);
+
+    const nextDays = Array.from({ length: 7 }, (_, i) => {
+        const date = new Date();
+        date.setDate(date.getDate() + i);
+        return date;
+    });
+
+    useEffect(() => {
+        if (selectedDate === null) {
+            setBookedSlots([]);
+            return;
+        }
+
+        const fetchBookedSlots = async () => {
+            setLoadingTimes(true);
+            setSelectedTime(null); // Reseta a hora selecionada ao mudar de dia
+            try {
+                const chosenDate = nextDays[selectedDate];
+                const formattedDate = chosenDate.toISOString().split('T')[0];
+
+                const bookedData = await fetchAPI(`/appointments/by-date/${formattedDate}`);
+
+                setBookedSlots(bookedData.map((appt: any) => appt.time));
+            } catch (error) {
+                console.error("Erro ao buscar horários ocupados:", error);
+                toast.error("Não foi possível verificar os horários.");
+            } finally {
+                setLoadingTimes(false);
+            }
+        };
+
+        fetchBookedSlots();
+    }, [selectedDate]);
+
 
     const loadConfig = async () => {
         try {
@@ -48,12 +86,6 @@ export default function ScheduleModal({ visible, onClose, serviceName, servicePr
             console.error("Erro ao carregar configurações:", error);
         }
     };
-
-    const nextDays = Array.from({ length: 7 }, (_, i) => {
-        const date = new Date();
-        date.setDate(date.getDate() + i);
-        return date;
-    });
 
     const handleConfirm = async () => {
         if (selectedDate === null || !selectedTime) {
@@ -88,7 +120,16 @@ export default function ScheduleModal({ visible, onClose, serviceName, servicePr
             toast.success("Agendamento realizado com sucesso!");
             onClose();
         } catch (error: any) {
-            toast.error(error.message || "Falha ao agendar");
+            if (error.message && error.message.includes('foreign key constraint fails')) {
+                toast.error("Sua sessão é inválida. Faça login novamente.", {
+                    duration: 4000,
+                });
+                // Desloga o usuário para forçar uma nova autenticação
+                logout();
+                onClose(); // Fecha o modal
+            } else {
+                toast.error(error.message || "Falha ao agendar");
+            }
         }
     };
 
@@ -142,19 +183,35 @@ export default function ScheduleModal({ visible, onClose, serviceName, servicePr
                         {/* Seleção de Horário */}
                         <View style={styles.section}>
                             <Text style={styles.sectionLabel}>HORÁRIOS DISPONÍVEIS</Text>
-                            <View style={styles.timeGrid}>
-                                {availableTimeSlots.map((time) => (
-                                    <TouchableOpacity
-                                        key={time}
-                                        onPress={() => setSelectedTime(time)}
-                                        style={[styles.timeChip, selectedTime === time && styles.timeChipActive]}
-                                    >
-                                        <Text style={[styles.timeText, selectedTime === time && styles.whiteText]}>
-                                            {time}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
+                            {loadingTimes ? (
+                                <ActivityIndicator style={{ height: 100 }} color="#DB2777" />
+                            ) : (
+                                <View style={styles.timeGrid}>
+                                    {availableTimeSlots.map((time) => {
+                                        const isBooked = bookedSlots.includes(time);
+                                        return (
+                                            <TouchableOpacity
+                                                key={time}
+                                                onPress={() => setSelectedTime(time)}
+                                                style={[
+                                                    styles.timeChip,
+                                                    selectedTime === time && styles.timeChipActive,
+                                                    isBooked && styles.timeChipDisabled
+                                                ]}
+                                                disabled={isBooked}
+                                            >
+                                                <Text style={[
+                                                    styles.timeText,
+                                                    selectedTime === time && styles.whiteText,
+                                                    isBooked && styles.timeTextDisabled
+                                                ]}>
+                                                    {time}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            )}
                         </View>
 
                         {/* Botão Final */}
@@ -234,7 +291,15 @@ const styles = StyleSheet.create({
         alignItems: 'center'
     },
     timeChipActive: { backgroundColor: '#DB2777', borderColor: '#DB2777' },
+    timeChipDisabled: {
+        backgroundColor: '#F9FAFB',
+        borderColor: '#F3F4F6',
+    },
     timeText: { fontSize: 13, fontWeight: '600', color: '#666' },
+    timeTextDisabled: {
+        color: '#D1D5DB',
+        textDecorationLine: 'line-through'
+    },
     whiteText: { color: '#FFF' },
     footer: { marginTop: 10 },
     confirmButton: {

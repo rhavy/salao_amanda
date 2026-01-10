@@ -1,5 +1,5 @@
 import { Message } from "@/constants/types"; // Importar tipo centralizado
-import { useAuth } from "@/hooks/useAuth";
+import useAuth from "@/hooks/useAuth";
 import { fetchAPI } from "@/services/api";
 import { getSocket } from "@/services/socket"; // Importar socket
 import { Ionicons } from "@expo/vector-icons";
