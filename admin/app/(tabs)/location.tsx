@@ -48,7 +48,7 @@ export default function AdminLocationScreen() {
     setLoading(true);
     try {
       const config = await getConfig();
-      console.log("Configuração recebida:", config); // Log para depuração
+      // console.log("Configuração recebida:", config); // Log para depuração
 
       if (config) {
         setWhatsapp(String(config.contact_whatsapp || ""));
@@ -61,25 +61,25 @@ export default function AdminLocationScreen() {
             setNeighborhood(addressParts[2] || "");
             setCity(addressParts[3] || ""); // Pode ser undefined, mas não vai quebrar
           } else {
-             console.warn("Formato de endereço inesperado:", config.contact_address);
+            console.warn("Formato de endereço inesperado:", config.contact_address);
           }
         }
 
         if (config.business_hours) {
-            try {
-                const hours = typeof config.business_hours === 'string' 
-                    ? JSON.parse(config.business_hours) 
-                    : config.business_hours;
-                
-                if (Array.isArray(hours)) {
-                    setBusinessHours(hours);
-                }
-            } catch (e) {
-                console.error("Erro ao fazer parse do JSON de business_hours:", e);
-                setBusinessHours([]); // Define como vazio em caso de erro
+          try {
+            const hours = typeof config.business_hours === 'string'
+              ? JSON.parse(config.business_hours)
+              : config.business_hours;
+
+            if (Array.isArray(hours)) {
+              setBusinessHours(hours);
             }
+          } catch (e) {
+            console.error("Erro ao fazer parse do JSON de business_hours:", e);
+            setBusinessHours([]); // Define como vazio em caso de erro
+          }
         } else {
-            setBusinessHours([]); // Define como vazio se não vier da API
+          setBusinessHours([]); // Define como vazio se não vier da API
         }
       }
     } catch (error) {
@@ -111,20 +111,20 @@ export default function AdminLocationScreen() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-        const configToSave = {
-            whatsapp,
-            street,
-            number,
-            neighborhood,
-            city,
-            businessHours,
-        };
-        await updateConfig(configToSave);
-        toast.success("Configurações salvas com sucesso!");
+      const configToSave = {
+        whatsapp,
+        street,
+        number,
+        neighborhood,
+        city,
+        businessHours,
+      };
+      await updateConfig(configToSave);
+      toast.success("Configurações salvas com sucesso!");
     } catch (error) {
-        toast.error("Erro ao salvar as configurações.");
+      toast.error("Erro ao salvar as configurações.");
     } finally {
-        setIsSaving(false);
+      setIsSaving(false);
     }
   };
 
@@ -149,9 +149,9 @@ export default function AdminLocationScreen() {
                 <Text style={styles.headerLabel}>GESTÃO DE UNIDADE</Text>
                 <Text style={styles.headerTitle}>Dados do Salão</Text>
               </View>
-              <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
+              {/* <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
                 <Ionicons name="log-out-outline" size={22} color="#D4AF37" />
-              </TouchableOpacity>
+              </TouchableOpacity> */}
             </View>
           </View>
 

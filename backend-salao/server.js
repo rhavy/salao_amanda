@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 
 const http = require('http');
 const { Server } = require('socket.io');
@@ -23,6 +24,9 @@ runMigrations();
 
 // Inicializa o handler de Chat
 require('./socket/chatHandler')(io);
+
+// Servir arquivos estáticos da pasta 'uploads'
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // --- ROTAS ---
 const authRoutes = require('./routes/auth');

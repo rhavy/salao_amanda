@@ -155,7 +155,7 @@ export default function TabLayout() {
           }}
         />
 
-        {/*
+
         <Tabs.Screen
           name="profile"
           options={{
@@ -166,7 +166,7 @@ export default function TabLayout() {
               </View>
             ),
           }}
-        /> */}
+        />
       </Tabs>
     </>
   );

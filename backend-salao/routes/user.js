@@ -1,8 +1,25 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const multer = require('multer');
+const path = require('path');
 
-// GET /profile/:email - Retorna dados do perfil e contagem de agendamentos
+// Configuração do Multer para upload de avatar
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/avatars/');
+    },
+    filename: function (req, file, cb) {
+        // Usa o email do usuário (se disponível) para um nome de arquivo mais descritivo
+        const userEmail = req.body.email ? req.body.email.split('@')[0] : 'user';
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, `${userEmail}-${uniqueSuffix}${path.extname(file.originalname)}`);
+    }
+});
+
+const upload = multer({ storage: storage });
+
+
 // GET /profile/:email - Retorna dados do perfil e contagem de agendamentos
 router.get('/profile/:email', async (req, res) => {
     const { email } = req.params;
@@ -77,6 +94,31 @@ router.put('/', async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Erro ao atualizar: ' + error.message });
+    }
+});
+
+// POST /profile/avatar - Faz upload de uma nova imagem de avatar
+router.post('/profile/avatar', upload.single('avatar'), async (req, res) => {
+    const { email } = req.body;
+
+    if (!req.file) {
+        return res.status(400).json({ message: 'Nenhum arquivo enviado.' });
+    }
+    if (!email) {
+        return res.status(400).json({ message: 'O email do usuário é obrigatório.' });
+    }
+
+    try {
+        // O caminho do arquivo deve ser acessível pela web, então usamos /uploads/...
+        const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+
+        // Atualiza o caminho do avatar no banco de dados
+        await db.query('UPDATE users SET avatar = ? WHERE email = ?', [avatarUrl, email]);
+
+        res.json({ message: 'Avatar atualizado com sucesso!', avatarUrl });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Erro ao salvar o avatar: ' + error.message });
     }
 });
 

@@ -82,4 +82,41 @@ router.post('/forgot-password', async (req, res) => {
     }
 });
 
+// --- ROTA DE MUDANÇA DE SENHA ---
+router.post('/change-password', async (req, res) => {
+    const { email, currentPassword, newPassword } = req.body;
+
+    if (!email || !currentPassword || !newPassword) {
+        return res.status(400).json({ error: 'Todos os campos são obrigatórios.' });
+    }
+
+    try {
+        // 1. Busca o usuário pelo e-mail
+        const [rows] = await db.query('SELECT * FROM users WHERE email = ?', [email]);
+        if (rows.length === 0) {
+            // Resposta genérica para não revelar se o email existe
+            return res.status(401).json({ error: 'Senha atual incorreta.' });
+        }
+        const user = rows[0];
+
+        // 2. Compara a senha atual enviada com o hash do banco
+        const match = await bcrypt.compare(currentPassword, user.password);
+        if (!match) {
+            return res.status(401).json({ error: 'Senha atual incorreta.' });
+        }
+
+        // 3. Criptografa a nova senha
+        const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds);
+
+        // 4. Atualiza a senha no banco de dados
+        await db.query('UPDATE users SET password = ? WHERE email = ?', [hashedNewPassword, email]);
+
+        res.json({ message: 'Senha alterada com sucesso!' });
+
+    } catch (error) {
+        console.error("Erro ao alterar senha:", error);
+        res.status(500).json({ error: 'Erro interno ao alterar a senha.' });
+    }
+});
+
 module.exports = router;

@@ -124,3 +124,41 @@ export async function updateConfig(config: any) {
         body: JSON.stringify(config),
     });
 }
+
+export async function uploadAvatar(formData: FormData) {
+    try {
+        const authDataString = await AsyncStorage.getItem(AUTH_KEY);
+        const headers = new Headers(); // Não definir Content-Type, o browser faz isso para multipart
+
+        if (authDataString) {
+            const { token } = JSON.parse(authDataString);
+            if (token) {
+                headers.set('Authorization', `Bearer ${token}`);
+            }
+        }
+
+        const response = await fetch(`${BASE_URL}/user/profile/avatar`, {
+            method: 'POST',
+            headers,
+            body: formData,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || `Erro ${response.status}`);
+        }
+
+        return data;
+    } catch (error) {
+        console.error('API Error (uploadAvatar):', error);
+        throw error;
+    }
+}
+
+export async function changePassword(email: string, currentPassword: string, newPassword: string) {
+    return fetchAPI('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ email, currentPassword, newPassword }),
+    });
+}
