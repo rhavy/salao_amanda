@@ -113,3 +113,14 @@ export async function deleteService(id: string) {
         method: 'DELETE',
     });
 }
+
+export async function getConfig() {
+    return fetchAPI('/config/info');
+}
+
+export async function updateConfig(config: any) {
+    return fetchAPI('/config/info', {
+        method: 'PUT',
+        body: JSON.stringify(config),
+    });
+}
