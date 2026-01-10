@@ -51,3 +51,26 @@ export async function fetchAPI(endpoint: string, options: RequestInit = {}) {
         throw error;
     }
 }
+
+// New interfaces and functions for categories and services
+export interface Category {
+    id: number;
+    name: string;
+}
+
+export interface Service {
+    id: string; // Assuming it remains string
+    name: string;
+    price: number;
+    duration: number;
+    category_id: number;
+    category_name: string;
+}
+
+export async function getServices(): Promise<Service[]> {
+    return fetchAPI('/services');
+}
+
+export async function getCategories(): Promise<Category[]> {
+    return fetchAPI('/categories');
+}

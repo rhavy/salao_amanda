@@ -1,9 +1,8 @@
-import ScheduleModal from "@/components/schedule";
-import { useAuth } from "@/hooks/useAuth";
-import { fetchAPI } from "@/services/api";
+import { fetchAPI, getServices, getCategories, Service, Category } from "@/services/api";
 import { Ionicons } from "@expo/vector-icons";
 import { FlashList, ListRenderItem } from "@shopify/flash-list";
 import React, { useEffect, useMemo, useState } from "react";
+import useAuth from "@/hooks/useAuth"; // Added back useAuth import
 import {
   ActivityIndicator,
   Alert,
@@ -16,21 +15,14 @@ import {
 } from "react-native";
 import Animated, { FadeInDown, FadeInRight } from "react-native-reanimated";
 
-interface Service {
-  id: string;
-  name: string;
-  price: number;
-  duration: number; // em minutos
-  category: string;
-}
-
 export default function ServicesScreen() {
   const { user } = useAuth();
 
   const [services, setServices] = useState<Service[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState("Todos");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null); // For category filtering
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false); // New state for RefreshControl
 
   const firstName = user?.name.split(' ')[0] || "Cliente";
   const userGender = user ? (user.name.endsWith('o') ? "Masculino" : "Feminino") : "Feminino";
@@ -38,30 +30,36 @@ export default function ServicesScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
 
-  useEffect(() => {
-    loadServices();
-  }, []);
-
-  const loadServices = async () => {
+  const fetchAllData = useCallback(async () => {
+    setIsRefreshing(true); // Set refreshing true when data fetching starts
     try {
-      setLoading(true);
-      const data = await fetchAPI('/services');
-      setServices(data);
-      // Gera as categorias dinamicamente a partir dos serviços
-      const uniqueCategories = ["Todos", ...new Set(data.map((s: Service) => s.category))] as string[];
-      setCategories(uniqueCategories);
+      const servicesData = await getServices();
+      setServices(Array.isArray(servicesData) ? servicesData : []);
+
+      const categoriesData = await getCategories();
+      setCategories(Array.isArray(categoriesData) ? categoriesData : []);
+
+      if (categoriesData.length > 0 && selectedCategoryId === undefined) {
+          setSelectedCategoryId(null); // 'Todos' option
+      }
+
     } catch (error) {
-      console.error(error);
-      Alert.alert("Erro", "Não foi possível carregar os serviços.");
+      console.error("Erro ao buscar dados (serviços ou categorias).", error);
+      Alert.alert("Erro", "Não foi possível carregar os serviços ou categorias.");
     } finally {
-      setLoading(false);
+      setLoading(false); // Ensure loading is false after refresh
+      setIsRefreshing(false); // Set refreshing false when data fetching ends
     }
-  };
+  }, [selectedCategoryId]); // Depend on selectedCategoryId if you want to re-fetch on category change
+
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]); // Now useEffect depends on fetchAllData
 
   const filteredServices = useMemo(() => {
-    if (selectedCategory === "Todos") return services;
-    return services.filter(s => s.category === selectedCategory);
-  }, [selectedCategory, services]);
+    if (selectedCategoryId === null) return services; // 'Todos' option
+    return services.filter(s => s.category_id === selectedCategoryId);
+  }, [selectedCategoryId, services]);
 
   const handleOpenSchedule = (service: Service) => {
     setSelectedService(service);
@@ -75,7 +73,7 @@ export default function ServicesScreen() {
     >
       <View style={styles.cardContent}>
         <View style={styles.infoContainer}>
-          <Text style={styles.categoryBadge}>{item.category.toUpperCase()}</Text>
+          <Text style={styles.categoryBadge}>{item.category_name.toUpperCase()}</Text>
           <Text style={styles.serviceName}>{item.name}</Text>
           <View style={styles.detailsRow}>
             <Ionicons name="time-outline" size={14} color="#999" />
@@ -115,20 +113,36 @@ export default function ServicesScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.filterScroll}
             >
+              <Animated.View key="todos" entering={FadeInRight.delay(0)}>
+                <TouchableOpacity
+                  onPress={() => setSelectedCategoryId(null)}
+                  style={[
+                    styles.filterTab,
+                    selectedCategoryId === null && styles.filterTabActive
+                  ]}
+                >
+                  <Text style={[
+                    styles.filterTabText,
+                    selectedCategoryId === null && styles.filterTabTextActive
+                  ]}>
+                    TODOS
+                  </Text>
+                </TouchableOpacity>
+              </Animated.View>
               {categories.map((cat, index) => (
-                <Animated.View key={cat} entering={FadeInRight.delay(index * 100)}>
+                <Animated.View key={cat.id} entering={FadeInRight.delay((index + 1) * 100)}>
                   <TouchableOpacity
-                    onPress={() => setSelectedCategory(cat)}
+                    onPress={() => setSelectedCategoryId(cat.id)}
                     style={[
                       styles.filterTab,
-                      selectedCategory === cat && styles.filterTabActive
+                      selectedCategoryId === cat.id && styles.filterTabActive
                     ]}
                   >
                     <Text style={[
                       styles.filterTabText,
-                      selectedCategory === cat && styles.filterTabTextActive
+                      selectedCategoryId === cat.id && styles.filterTabTextActive
                     ]}>
-                      {cat.toUpperCase()}
+                      {cat.name.toUpperCase()}
                     </Text>
                   </TouchableOpacity>
                 </Animated.View>
@@ -141,6 +155,9 @@ export default function ServicesScreen() {
             renderItem={renderItem}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.listPadding}
+            refreshControl={ // Added RefreshControl
+              <RefreshControl refreshing={isRefreshing} onRefresh={fetchAllData} tintColor="#DB2777" />
+            }
             ListEmptyComponent={
               <Text style={styles.emptyText}>Nenhum serviço nesta categoria.</Text>
             }

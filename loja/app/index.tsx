@@ -1,4 +1,4 @@
-import { useAuth } from "@/hooks/useAuth";
+import useAuth from "@/hooks/useAuth";
 import { Redirect } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
 

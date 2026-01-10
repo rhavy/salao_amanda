@@ -19,7 +19,7 @@ interface AuthData {
 
 const AUTH_KEY = '@salao_amanda:auth';
 
-export function useAuth() {
+export default function useAuth() {
     const [authData, setAuthData] = useState<AuthData>({ user: null, token: null });
     const [loading, setLoading] = useState(true);
 
