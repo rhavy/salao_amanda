@@ -1,0 +1,282 @@
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import Animated, { FadeInUp, LinearTransition } from "react-native-reanimated";
+import { toast } from "sonner-native";
+
+import { useFinanceData } from "@/hooks/useFinanceData";
+
+export default function AdminFinanceScreen() {
+  const [monthlyGoal, setMonthlyGoal] = useState(5000);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [newGoalInput, setNewGoalInput] = useState("");
+
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+
+  const { financeData, loading, error } = useFinanceData(selectedMonth, selectedYear);
+
+  const months = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+  ];
+
+  const finance = useMemo(() => {
+    if (!financeData) {
+      return { real: 0, projection: 0, count: 0, progress: 0, totalYear: 0 };
+    }
+    const progress = Math.min((financeData.real / monthlyGoal) * 100, 100);
+
+    return { ...financeData, progress };
+  }, [financeData, monthlyGoal]);
+
+  const changeMonth = (direction: 'next' | 'prev') => {
+    if (direction === 'prev') {
+      if (selectedMonth === 1) { setSelectedMonth(12); setSelectedYear(y => y - 1); }
+      else setSelectedMonth(m => m - 1);
+    } else {
+      if (selectedMonth === 12) { setSelectedMonth(1); setSelectedYear(y => y + 1); }
+      else setSelectedMonth(m => m + 1);
+    }
+  };
+
+  const handleSaveGoal = () => {
+    setMonthlyGoal(Number(newGoalInput));
+    setIsModalVisible(false);
+    toast.success("Meta atualizada!");
+  };
+
+  if (loading) return (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="small" color="#D4AF37" />
+    </View>
+  );
+
+  if (error) return (
+    <View style={styles.loadingContainer}>
+      <Text>{error}</Text>
+    </View>
+  );
+
+  return (
+    <View style={styles.container}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+
+        {/* Header Financeiro Premium (Admin Theme) */}
+        <View style={styles.headerCard}>
+          <LinearGradient
+            colors={['#1A1A1A', '#333']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.headerGradient}
+          />
+
+          <View style={styles.monthPicker}>
+            <TouchableOpacity onPress={() => changeMonth('prev')} style={styles.navButton}>
+              <Ionicons name="chevron-back" size={18} color="#D4AF37" />
+            </TouchableOpacity>
+
+            <View style={styles.monthInfo}>
+              <Text style={styles.monthText}>{months[selectedMonth - 1].toUpperCase()}</Text>
+              <Text style={styles.yearText}>{selectedYear}</Text>
+            </View>
+
+            <TouchableOpacity onPress={() => changeMonth('next')} style={styles.navButton}>
+              <Ionicons name="chevron-forward" size={18} color="#D4AF37" />
+            </TouchableOpacity>
+          </View>
+
+          <Animated.View entering={FadeInUp} style={styles.mainBalance}>
+            <Text style={styles.balanceLabel}>FATURAMENTO REALIZADO</Text>
+            <Text style={styles.balanceValue}>
+              {finance.real.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </Text>
+          </Animated.View>
+
+          <View style={styles.statsRow}>
+            <View style={styles.miniStat}>
+              <Text style={styles.miniLabel}>PROJEÇÃO MÊS</Text>
+              <Text style={styles.miniValue}>R$ {finance.projection.toFixed(0)}</Text>
+            </View>
+            <View style={styles.miniStat}>
+              <Text style={styles.miniLabel}>ACUMULADO ANO</Text>
+              <Text style={styles.miniValue}>R$ {finance.totalYear.toFixed(0)}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Content Section */}
+        <View style={styles.content}>
+          <Text style={styles.sectionTitle}>INDICADORES DE DESEMPENHO</Text>
+
+          <View style={styles.grid}>
+            <View style={[styles.infoCard, styles.shadowGold]}>
+              <View style={[styles.iconBox, { backgroundColor: '#FDFCF0' }]}>
+                <Ionicons name="people-outline" size={22} color="#D4AF37" />
+              </View>
+              <Text style={styles.cardValue}>{finance.count}</Text>
+              <Text style={styles.cardLabel}>CLIENTES</Text>
+            </View>
+
+            <View style={[styles.infoCard, styles.shadowGreen]}>
+              <View style={[styles.iconBox, { backgroundColor: '#F0FDF4' }]}>
+                <Ionicons name="trending-up-outline" size={22} color="#10B981" />
+              </View>
+              <Text style={styles.cardValue}>R$ {(finance.count > 0 ? (finance.real / finance.count) : 0).toFixed(0)}</Text>
+              <Text style={styles.cardLabel}>TICKET MÉDIO</Text>
+            </View>
+          </View>
+
+          {/* Goal Section */}
+          <View style={styles.goalCard}>
+            <View style={styles.goalHeader}>
+              <View>
+                <Text style={styles.goalTitle}>Meta do Mês</Text>
+                <Text style={styles.goalSubtitle}>Objetivo: R$ {monthlyGoal.toLocaleString()}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => { setNewGoalInput(monthlyGoal.toString()); setIsModalVisible(true); }}
+              >
+                <Ionicons name="create-outline" size={18} color="#D4AF37" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.progressContainer}>
+              <View style={styles.progressBarBg}>
+                <Animated.View
+                  layout={LinearTransition}
+                  style={[styles.progressBarFill, { width: `${finance.progress}%` }]}
+                >
+                  <LinearGradient
+                    colors={['#D4AF37', '#B8860B']}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                    style={StyleSheet.absoluteFill}
+                  />
+                </Animated.View>
+              </View>
+              <Text style={styles.progressText}>{finance.progress.toFixed(1)}%</Text>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Modern Bottom Sheet Modal */}
+      <Modal visible={isModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
+            <View style={styles.dragIndicator} />
+            <Text style={styles.modalTitle}>Ajustar Meta</Text>
+            <Text style={styles.modalDesc}>Defina o novo alvo para {months[selectedMonth]}</Text>
+
+            <View style={styles.inputWrapper}>
+              <Text style={styles.currencyPrefix}>R$</Text>
+              <TextInput
+                style={styles.goalInput}
+                keyboardType="numeric"
+                value={newGoalInput}
+                onChangeText={setNewGoalInput}
+                autoFocus
+                placeholderTextColor="#CCC"
+              />
+            </View>
+
+            <TouchableOpacity style={styles.saveButton} onPress={handleSaveGoal}>
+              <Text style={styles.saveButtonText}>SALVAR CONFIGURAÇÃO</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setIsModalVisible(false)} style={styles.cancelBtn}>
+              <Text style={styles.cancelBtnText}>Cancelar</Text>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#FAFAFA' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  scrollContent: { paddingBottom: 40 },
+  headerCard: {
+    paddingTop: Platform.OS === 'ios' ? 40 : 20,
+    paddingHorizontal: 25,
+    paddingBottom: 45,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    overflow: 'hidden',
+  },
+  headerGradient: { ...StyleSheet.absoluteFillObject },
+  monthPicker: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 35,
+  },
+  navButton: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(212, 175, 55, 0.1)',
+    alignItems: 'center', justifyContent: 'center'
+  },
+  monthInfo: { alignItems: 'center' },
+  monthText: { color: 'white', fontSize: 13, fontWeight: '900', letterSpacing: 2 },
+  yearText: { color: '#D4AF37', fontSize: 10, fontWeight: '700', marginTop: 2 },
+  mainBalance: { alignItems: 'center', marginBottom: 35 },
+  balanceLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '800', letterSpacing: 2, marginBottom: 10 },
+  balanceValue: { color: 'white', fontSize: 40, fontWeight: '200', letterSpacing: -1 },
+  statsRow: { flexDirection: 'row', gap: 15 },
+  miniStat: {
+    flex: 1, padding: 18, borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)'
+  },
+  miniLabel: { color: 'rgba(212, 175, 55, 0.5)', fontSize: 8, fontWeight: '900', marginBottom: 5 },
+  miniValue: { color: 'white', fontSize: 15, fontWeight: '700' },
+  content: { padding: 25 },
+  sectionTitle: { fontSize: 10, fontWeight: '900', color: '#CCC', letterSpacing: 2, marginBottom: 20 },
+  grid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
+  infoCard: { width: '48%', backgroundColor: 'white', padding: 25, borderRadius: 32, alignItems: 'center' },
+  shadowGold: { shadowColor: '#D4AF37', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.08, shadowRadius: 15, elevation: 3 },
+  shadowGreen: { shadowColor: '#10B981', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.08, shadowRadius: 15, elevation: 3 },
+  iconBox: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  cardValue: { fontSize: 24, fontWeight: '700', color: '#1A1A1A' },
+  cardLabel: { fontSize: 9, fontWeight: '800', color: '#999', marginTop: 4 },
+  goalCard: { backgroundColor: 'white', padding: 25, borderRadius: 32, borderWidth: 1, borderColor: '#F3F4F6' },
+  goalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  goalTitle: { fontSize: 17, fontWeight: '700', color: '#1A1A1A' },
+  goalSubtitle: { fontSize: 12, color: '#999', marginTop: 3 },
+  editButton: { backgroundColor: '#FDFCF0', padding: 10, borderRadius: 14 },
+  progressContainer: { flexDirection: 'row', alignItems: 'center', gap: 15 },
+  progressBarBg: { flex: 1, height: 8, backgroundColor: '#F3F4F6', borderRadius: 4, overflow: 'hidden' },
+  progressBarFill: { height: '100%', borderRadius: 4 },
+  progressText: { fontSize: 13, fontWeight: '900', color: '#D4AF37' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: 'white', borderTopLeftRadius: 40, borderTopRightRadius: 40, padding: 30, paddingBottom: 50 },
+  dragIndicator: { width: 40, height: 5, backgroundColor: '#EEE', borderRadius: 3, alignSelf: 'center', marginBottom: 25 },
+  modalTitle: { fontSize: 22, fontWeight: '800', color: '#1A1A1A' },
+  modalDesc: { fontSize: 14, color: '#999', marginTop: 6, marginBottom: 30 },
+  inputWrapper: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#FAFAFA', padding: 20,
+    borderRadius: 24, borderWidth: 1, borderColor: '#EEE', marginBottom: 30
+  },
+  currencyPrefix: { fontSize: 18, fontWeight: '800', color: '#D4AF37', marginRight: 10 },
+  goalInput: { flex: 1, fontSize: 26, fontWeight: '700', color: '#1A1A1A' },
+  saveButton: { backgroundColor: '#1A1A1A', padding: 20, borderRadius: 20, alignItems: 'center' },
+  saveButtonText: { color: 'white', fontSize: 13, fontWeight: '900', letterSpacing: 2 },
+  cancelBtn: { marginTop: 22, alignItems: 'center' },
+  cancelBtnText: { color: '#999', fontWeight: '600' }
+});
