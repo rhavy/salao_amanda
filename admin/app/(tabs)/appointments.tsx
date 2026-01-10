@@ -21,7 +21,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { toast } from "sonner-native";
 import { getAppointments, updateAppointmentStatus, deleteAppointment } from "@/services/api";
 
-type FilterType = 'all' | 'pending' | 'today' | 'confirmed' | 'finished' | 'canceled' | 'apagado';
+type FilterType = 'all' | 'pending' | 'today' | 'confirmed' | 'finished' | 'canceled' | 'cancelado' | 'apagado';
 
 export default function AdminPanelScreen() {
     const [loading, setLoading] = useState(true);
@@ -32,8 +32,38 @@ export default function AdminPanelScreen() {
 
     // Função utilitária para normalizar datas do banco (evita erro de Invalid Date no iOS)
     const parseDate = (dateStr: string) => {
-        if (!dateStr) return new Date();
-        return new Date(dateStr.replace(/-/g, '\/'));
+        if (!dateStr) return null;
+
+        // A API pode retornar a data no formato YYYY-MM-DD ou YYYY-MM-DDTHH:mm:ss.sssZ.
+        // Pegamos apenas a parte da data.
+        const dateOnlyStr = dateStr.split('T')[0];
+        const parts = dateOnlyStr.split('-');
+
+        if (parts.length !== 3) {
+            console.warn(`Formato de data inesperado: ${dateStr}`);
+            return null;
+        }
+
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // Mês é 0-indexed no JS
+        const day = parseInt(parts[2], 10);
+
+        // Checagem de sanidade
+        if (isNaN(year) || isNaN(month) || isNaN(day)) {
+            console.warn(`Componentes de data inválidos: ${dateStr}`);
+            return null;
+        }
+
+        // Usar Date.UTC para criar a data e evitar problemas de fuso horário
+        // que podem fazer a data "voltar" um dia.
+        const date = new Date(Date.UTC(year, month, day));
+
+        if (isNaN(date.getTime())) {
+            console.warn(`Data inválida após o parse: ${dateStr}`);
+            return null;
+        }
+
+        return date;
     };
 
     const fetchAppointments = useCallback(async (silent = false) => {
@@ -67,9 +97,9 @@ export default function AdminPanelScreen() {
             pendingCount: appointments.filter(a => a.status === 'pending').length,
             confirmedCount: appointments.filter(a => a.status === 'confirmed').length,
             finishedCount: appointments.filter(a => a.status === 'finished').length,
-            canceledCount: appointments.filter(a => a.status === 'canceled').length,
+            canceledCount: appointments.filter(a => a.status === 'canceled' || a.status === 'cancelado').length,
             apagadoCount: appointments.filter(a => a.status === 'apagado').length,
-            todayCount: appointments.filter(a => parseDate(a.date).toDateString() === todayStr).length,
+            todayCount: appointments.filter(a => parseDate(a.date)?.toDateString() === todayStr).length,
             allCount: appointments.length
         };
     }, [appointments]);
@@ -79,7 +109,9 @@ export default function AdminPanelScreen() {
         return appointments.filter(a => {
             const matchesStatus = () => {
                 if (filterStatus === 'all') return true;
-                if (filterStatus === 'today') return parseDate(a.date).toDateString() === todayStr;
+                if (filterStatus === 'today') return parseDate(a.date)?.toDateString() === todayStr;
+                // Modificado para incluir 'cancelado' e 'canceled'
+                if (filterStatus === 'canceled') return a.status === 'canceled' || a.status === 'cancelado';
                 return a.status === filterStatus;
             };
             const name = a.userName?.toLowerCase() || "";
@@ -98,17 +130,51 @@ export default function AdminPanelScreen() {
         }
     };
 
-    const handleDelete = (id: string) => {
-        Alert.alert("Excluir Agendamento", "Deseja remover permanentemente?", [
+    const handleSoftDelete = (id: string) => {
+        Alert.alert("Apagar Agendamento", "Deseja mover este agendamento para a lixeira?", [
+            { text: "Cancelar", style: "cancel" },
+            {
+                text: "Apagar", style: "destructive", onPress: async () => {
+                    try {
+                        await updateAppointmentStatus(id, 'apagado');
+                        toast.success("Agendamento movido para a lixeira.");
+                        fetchAppointments(true);
+                    } catch (error) {
+                        toast.error("Erro ao apagar o agendamento.");
+                    }
+                }
+            }
+        ]);
+    };
+
+    const handleRestore = (id: string) => {
+        Alert.alert("Restaurar Agendamento", "Deseja restaurar este agendamento?", [
+            { text: "Cancelar", style: "cancel" },
+            {
+                text: "Restaurar", style: "default", onPress: async () => {
+                    try {
+                        await updateAppointmentStatus(id, 'pending');
+                        toast.success("Agendamento restaurado para 'pendente'.");
+                        fetchAppointments(true);
+                    } catch (error) {
+                        toast.error("Erro ao restaurar o agendamento.");
+                    }
+                }
+            }
+        ]);
+    };
+
+    const deleteAppointmentPermanently = (id: string) => {
+        Alert.alert("Excluir Permanentemente", "Esta ação é irreversível. Deseja excluir permanentemente este agendamento?", [
             { text: "Cancelar", style: "cancel" },
             {
                 text: "Excluir", style: "destructive", onPress: async () => {
                     try {
                         await deleteAppointment(id);
-                        toast.success("Agendamento removido.");
+                        toast.success("Agendamento excluído permanentemente.");
                         fetchAppointments(true);
                     } catch (error) {
-                        toast.error("Erro ao excluir.");
+                        toast.error("Erro ao excluir permanentemente o agendamento.");
                     }
                 }
             }
@@ -121,6 +187,7 @@ export default function AdminPanelScreen() {
             confirmed: { color: "#3B82F6", bg: "#EFF6FF", label: "CONFIRMADO" },
             finished: { color: "#10B981", bg: "#F0FDF4", label: "CONCLUÍDO" },
             canceled: { color: "#EF4444", bg: "#FEE2E2", label: "CANCELADO" },
+            cancelado: { color: "#EF4444", bg: "#FEE2E2", label: "CANCELADO PELO CLIENTE" },
             apagado: { color: "#9CA3AF", bg: "#F3F4F6", label: "APAGADO" },
         };
         const theme = statusTheme[item.status as keyof typeof statusTheme] || statusTheme.pending;
@@ -150,49 +217,57 @@ export default function AdminPanelScreen() {
                 <View style={styles.timeRow}>
                     <Ionicons name="time-outline" size={14} color="#999" />
                     <Text style={styles.timeText}>
-                        {item.date ? parseDate(item.date).toLocaleDateString('pt-BR') : '--/--'} às {item.time || '--:--'}
+                        {parseDate(item.date)?.toLocaleDateString('pt-BR') || '--/--'} às {item.time || '--:--'}
                     </Text>
                     <Text style={styles.cardPrice}>R$ {Number(item.price || 0).toFixed(2)}</Text>
                 </View>
 
                 <View style={styles.cardActions}>
-                    <View style={styles.statusButtons}>
-                        <TouchableOpacity
-                            onPress={() => handleUpdateStatus(item, 'pending')}
-                            style={[styles.actionBtn, styles.inactiveBtn, item.status === 'pending' || item.status === 'apagado' ? styles.activePending : styles.inactiveBtn]}
-                        >
-                            <Ionicons name="time" size={16} color={item.status === 'pending' ? "white" : "#A0A0A0"} />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            onPress={() => handleUpdateStatus(item, 'confirmed')}
-                            style={[styles.actionBtn, styles.inactiveBtn, item.status === 'confirmed' && styles.activeConfirmed]}
-                            disabled={item.status === 'apagado'}
-                        >
-                            <Ionicons name="checkmark-circle" size={16} color={item.status === 'confirmed' ? "white" : "#A0A0A0"} />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            onPress={() => handleUpdateStatus(item, 'finished')}
-                            style={[styles.actionBtn, styles.inactiveBtn, item.status === 'finished' && styles.activeFinished]}
-                            disabled={item.status === 'apagado'}
-                        >
-                            <Ionicons name="cash" size={16} color={item.status === 'finished' ? "white" : "#A0A0A0"} />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            onPress={() => handleUpdateStatus(item, 'canceled')}
-                            style={[styles.actionBtn, styles.inactiveBtn, item.status === 'canceled' && styles.activeCanceled]}
-                            disabled={item.status === 'apagado'}
-                        >
-                            <Ionicons name="close-circle" size={16} color={item.status === 'canceled' ? "white" : "#A0A0A0"} />
-                        </TouchableOpacity>
-                    </View>
-
-                    <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}
-                        disabled={item.status === 'apagado'}>
-                        <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                    </TouchableOpacity>
+                    {item.status === 'apagado' ? (
+                        <View style={styles.statusButtons}>
+                            <TouchableOpacity onPress={() => handleRestore(item.id)}
+                                style={[styles.actionBtn, styles.restoreBtn]}>
+                                <Ionicons name="refresh-circle-outline" size={18} color="#10B981" />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => deleteAppointmentPermanently(item.id)}
+                                style={[styles.actionBtn, styles.deleteBtn]}>
+                                <Ionicons name="trash" size={18} color="#EF4444" />
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <>
+                            <View style={styles.statusButtons}>
+                                <TouchableOpacity
+                                    onPress={() => handleUpdateStatus(item, 'pending')}
+                                    style={[styles.actionBtn, item.status === 'pending' ? styles.activePending : styles.inactiveBtn]}
+                                    disabled={item.status === 'pending'}>
+                                    <Ionicons name="time" size={16} color={item.status === 'pending' ? "white" : "#A0A0A0"} />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => handleUpdateStatus(item, 'confirmed')}
+                                    style={[styles.actionBtn, item.status === 'confirmed' ? styles.activeConfirmed : styles.inactiveBtn]}
+                                    disabled={item.status === 'confirmed'}>
+                                    <Ionicons name="checkmark-circle" size={16} color={item.status === 'confirmed' ? "white" : "#A0A0A0"} />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => handleUpdateStatus(item, 'finished')}
+                                    style={[styles.actionBtn, item.status === 'finished' ? styles.activeFinished : styles.inactiveBtn]}
+                                    disabled={item.status === 'finished'}>
+                                    <Ionicons name="cash" size={16} color={item.status === 'finished' ? "white" : "#A0A0A0"} />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    onPress={() => handleUpdateStatus(item, 'canceled')}
+                                    style={[styles.actionBtn, (item.status === 'canceled' || item.status === 'cancelado') ? styles.activeCanceled : styles.inactiveBtn]}
+                                    disabled={item.status === 'canceled' || item.status === 'cancelado'}>
+                                    <Ionicons name="close-circle" size={16} color={(item.status === 'canceled' || item.status === 'cancelado') ? "white" : "#A0A0A0"} />
+                                </TouchableOpacity>
+                            </View>
+                            <TouchableOpacity onPress={() => handleSoftDelete(item.id)}
+                                style={[styles.actionBtn, styles.deleteBtn]}>
+                                <Ionicons name="trash-outline" size={18} color={'#EF4444'} />
+                            </TouchableOpacity>
+                        </>
+                    )}
                 </View>
             </Animated.View>
         );
@@ -359,7 +434,9 @@ const styles = StyleSheet.create({
     activeConfirmed: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
     activeFinished: { backgroundColor: '#10B981', borderColor: '#10B981' },
     activeCanceled: { backgroundColor: '#EF4444', borderColor: '#EF4444' },
+    activeApagado: { backgroundColor: '#9CA3AF', borderColor: '#9CA3AF' },
     deleteBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center' },
+    restoreBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#F0FDF4', alignItems: 'center', justifyContent: 'center' },
     emptyContainer: { alignItems: 'center', marginTop: 60, opacity: 0.5 },
     emptyText: { marginTop: 15, color: '#999', fontSize: 14, fontWeight: '500' }
 });

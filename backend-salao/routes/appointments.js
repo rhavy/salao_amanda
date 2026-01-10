@@ -27,7 +27,18 @@ router.post('/', async (req, res) => {
 // Rota para buscar TODOS os agendamentos (para admin)
 router.get('/', async (req, res) => {
     try {
-        const [rows] = await db.query('SELECT * FROM appointments ORDER BY `created_at` DESC');
+        const sql = `
+            SELECT 
+                a.*, 
+                u.name as userName 
+            FROM 
+                appointments a
+            LEFT JOIN 
+                users u ON a.user_email = u.email
+            ORDER BY 
+                a.date DESC, a.time DESC
+        `;
+        const [rows] = await db.query(sql);
         res.json(rows);
     } catch (error) {
         console.error(error);
@@ -64,15 +75,22 @@ router.patch('/:id/status', async (req, res) => {
     }
 });
 
-// 4. Rota para cancelar agendamento (PUT/DELETE Lógico)
+// Rota para deletar permanentemente um agendamento
 router.delete('/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        await db.query("UPDATE appointments SET status = 'cancelado' WHERE id = ?", [id]);
-        res.json({ message: 'Agendamento marcado como cancelado com sucesso!' });
+        // Primeiro, verifique se o agendamento existe
+        const [rows] = await db.query('SELECT * FROM appointments WHERE id = ?', [id]);
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'Agendamento não encontrado.' });
+        }
+
+        // Se existir, execute a exclusão
+        await db.query('DELETE FROM appointments WHERE id = ?', [id]);
+        res.status(200).json({ message: 'Agendamento excluído permanentemente com sucesso!' });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Erro ao cancelar agendamento' });
+        console.error('Erro ao excluir o agendamento permanentemente:', error);
+        res.status(500).json({ message: 'Erro ao excluir o agendamento permanentemente.' });
     }
 });
 

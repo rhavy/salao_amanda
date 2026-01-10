@@ -68,9 +68,8 @@ export async function updateAppointmentStatus(id: string, status: string) {
 }
 
 export async function deleteAppointment(id: string) {
-    return fetchAPI(`/appointments/${id}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status: 'apagado' }),
+    return fetchAPI(`/appointments/${id}`, {
+        method: 'DELETE',
     });
 }
 
