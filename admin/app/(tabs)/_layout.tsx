@@ -144,6 +144,17 @@ export default function TabLayout() {
           }}
         />
         <Tabs.Screen
+          name="chat"
+          options={{
+            title: "Chat",
+            tabBarIcon: ({ color, focused }) => (
+              <View style={[styles.iconBox, focused && { backgroundColor: isAdmin ? '#262626' : '#FFF1F6' }]}>
+                <TabBarIcon name={focused ? "chatbubble" : "chatbubble-outline"} color={color} size={20} />
+              </View>
+            ),
+          }}
+        />
+        <Tabs.Screen
           name="location"
           options={{
             title: "Localização",
@@ -154,7 +165,6 @@ export default function TabLayout() {
             ),
           }}
         />
-
 
         <Tabs.Screen
           name="profile"

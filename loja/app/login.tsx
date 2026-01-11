@@ -42,7 +42,7 @@ export default function LoginScreen() {
       // A API não está retornando um token, então salvamos o usuário e um token nulo.
       // Isso permitirá que o app continue, mas as rotas protegidas por token falharão.
       if (response.user) {
-        await saveUser({ user: response.user, token: null }); // Token é null
+        await saveUser({ user: response.user, token: response.token || null });
         toast.success(`Bem-vinda de volta, ${response.user.name || 'Cliente'}!`);
         router.replace("/(tabs)");
       } else {

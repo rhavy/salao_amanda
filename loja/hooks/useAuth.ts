@@ -54,8 +54,10 @@ export default function useAuth() {
 
     const logout = async () => {
         try {
+            console.log('Attempting logout (loja): Clearing AsyncStorage and state...');
             await AsyncStorage.removeItem(AUTH_KEY);
             setAuthData({ user: null, token: null });
+            console.log('Logout successful (loja): AsyncStorage cleared, state reset.');
         } catch (error) {
             console.error('Erro ao fazer logout:', error);
         }

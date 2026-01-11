@@ -2,7 +2,11 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken'); // Import jsonwebtoken
 const saltRounds = 10;
+
+// TODO: Use an environment variable for JWT_SECRET in production
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key'; // Define a secret key
 
 // --- ROTA DE REGISTRO ---
 router.post('/register', async (req, res) => {
@@ -55,11 +59,19 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'E-mail ou senha incorretos.' });
         }
 
-        // 3. Retorna os dados do usuário (exceto a senha)
+        // 3. Gera o Token JWT
+        const token = jwt.sign(
+            { id: user.id, email: user.email, role: user.role }, // Payload
+            JWT_SECRET,                                          // Secret key
+            { expiresIn: '8h' }                                  // Token expiration
+        );
+
+        // 4. Retorna os dados do usuário (exceto a senha) e o token
         const { password: _, ...userWithoutPassword } = user;
-        res.json({ message: 'Login bem-sucedido!', user: userWithoutPassword });
+        res.json({ message: 'Login bem-sucedido!', user: userWithoutPassword, token }); // Include the token
 
     } catch (error) {
+        console.error("Erro no login:", error); // Adicionei log para depuração
         res.status(500).json({ error: 'Erro ao processar login.' });
     }
 });

@@ -1,0 +1,11 @@
+1 login 
+ao login feito com sucesso salva as credenciais do usuário, ao ele entra no app usa as credenciais salvas para efetuar o login novamente 
+
+2 área perfil 
+campo nome e telefone o texto digitado encontra-se sem coro impossibilitando do usuário ver
+
+3 erro ao iniciar o app admin 
+ ERROR  API Error (/finance?month=1&year=2026): [TypeError: Network request failed]
+
+Call Stack
+  setTimeout$argument_0 (node_modules\whatwg-fetch\dist\fetch.umd.js)

@@ -46,7 +46,7 @@ export default function LoginScreen() {
         // Lógica de Redirecionamento Baseada em Role
         if (response.user.role === 'admin') {
           toast.success(`Acesso Administrativo: Olá, ${response.user.name}!`);
-          router.replace("/admin/dashboard" as any); // Redireciona para área admin
+          router.replace("/(tabs)"); // Redireciona para área admin
         } else {
           toast.success(`Bem-vinda de volta, ${response.user.name.split(' ')[0]}!`);
           router.replace("/(tabs)"); // Redireciona para área cliente

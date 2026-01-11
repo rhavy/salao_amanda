@@ -51,7 +51,7 @@ export default function ProfileScreen() {
     const [showCurrentPassword, setShowCurrentPassword] = useState(false);
     const [showNewPassword, setShowNewPassword] = useState(false);
     const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
-    
+
     // Estados dos Toggles (Iniciados com valores padrão, atualizados no loadProfile)
     const [settings, setSettings] = useState({
         notifications_reminders: true,
@@ -204,14 +204,14 @@ export default function ProfileScreen() {
             // O nome do arquivo pode ser extraído do URI.
             const uriParts = asset.uri.split('/');
             const fileName = uriParts[uriParts.length - 1];
-            
+
             // Adiciona a imagem ao FormData
             formData.append('avatar', {
                 uri: asset.uri,
                 name: fileName,
                 type: asset.type || 'image/jpeg', // O tipo pode ser inferido ou padrão
             } as any);
-            
+
             // Adiciona o email do usuário
             formData.append('email', user.email);
 
@@ -319,7 +319,7 @@ export default function ProfileScreen() {
                         subtitle="Editar nome e contato"
                         onPress={handleOpenEdit}
                     />
-                    <MenuItem
+                    {/* <MenuItem
                         icon="notifications-outline"
                         title="Notificações"
                         subtitle="Lembretes de horário"
@@ -329,7 +329,7 @@ export default function ProfileScreen() {
                         icon="shield-checkmark-outline"
                         title="Privacidade"
                         onPress={() => setPrivacyModalVisible(true)}
-                    />
+                    /> */}
                     <MenuItem
                         icon="lock-closed-outline"
                         title="Mudar Senha"
@@ -367,24 +367,30 @@ export default function ProfileScreen() {
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>NOME COMPLETO</Text>
-                            <TextInput
-                                style={styles.input}
-                                value={editName}
-                                onChangeText={setEditName}
-                                placeholder="Seu nome"
-                            />
+                            <View style={styles.passwordInputWrapper}>
+                                <TextInput
+                                    style={styles.inputInner}
+                                    value={editName}
+                                    onChangeText={setEditName}
+                                    placeholder="Seu nome"
+                                />
+                            </View>
+
                         </View>
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>TELEFONE / WHATSAPP</Text>
-                            <MaskInput
-                                style={styles.input}
-                                value={editPhone}
-                                onChangeText={setEditPhone}
-                                placeholder="(XX) XXXXX-XXXX"
-                                keyboardType="phone-pad"
-                                mask={Masks.BRL_PHONE}
-                            />
+                            <View style={styles.passwordInputWrapper}>
+
+                                <MaskInput
+                                    style={styles.inputInner}
+                                    value={editPhone}
+                                    onChangeText={setEditPhone}
+                                    placeholder="(XX) XXXXX-XXXX"
+                                    keyboardType="phone-pad"
+                                    mask={Masks.BRL_PHONE}
+                                />
+                            </View>
                         </View>
 
                         <TouchableOpacity
@@ -403,7 +409,7 @@ export default function ProfileScreen() {
             </Modal>
 
             {/* Modal Notificações */}
-            <Modal
+            {/* <Modal
                 animationType="slide"
                 transparent={true}
                 visible={notifModalVisible}
@@ -445,10 +451,10 @@ export default function ProfileScreen() {
                         </View>
                     </View>
                 </View>
-            </Modal>
+            </Modal> */}
 
             {/* Modal Privacidade */}
-            <Modal
+            {/* <Modal
                 animationType="slide"
                 transparent={true}
                 visible={privacyModalVisible}
@@ -477,7 +483,7 @@ export default function ProfileScreen() {
                         </View>
                     </View>
                 </View>
-            </Modal>
+            </Modal> */}
 
             {/* Modal de Mudança de Senha */}
             <Modal
@@ -498,49 +504,64 @@ export default function ProfileScreen() {
                             </TouchableOpacity>
                         </View>
 
+                        {/* SENHA ATUAL */}
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>SENHA ATUAL</Text>
-                            <View style={styles.passwordInputContainer}>
+                            <View style={styles.passwordInputWrapper}>
                                 <TextInput
-                                    style={styles.input}
+                                    style={styles.inputInner}
                                     value={currentPassword}
                                     onChangeText={setCurrentPassword}
                                     placeholder="******"
+                                    placeholderTextColor="#CCC"
                                     secureTextEntry={!showCurrentPassword}
                                 />
-                                <TouchableOpacity onPress={() => setShowCurrentPassword(!showCurrentPassword)} style={styles.passwordToggleBtn}>
+                                <TouchableOpacity
+                                    onPress={() => setShowCurrentPassword(!showCurrentPassword)}
+                                    style={styles.eyeIcon}
+                                >
                                     <Ionicons name={showCurrentPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#999" />
                                 </TouchableOpacity>
                             </View>
                         </View>
 
+                        {/* NOVA SENHA */}
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>NOVA SENHA</Text>
-                            <View style={styles.passwordInputContainer}>
+                            <View style={styles.passwordInputWrapper}>
                                 <TextInput
-                                    style={styles.input}
+                                    style={styles.inputInner}
                                     value={newPassword}
                                     onChangeText={setNewPassword}
                                     placeholder="******"
+                                    placeholderTextColor="#CCC"
                                     secureTextEntry={!showNewPassword}
                                 />
-                                <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)} style={styles.passwordToggleBtn}>
+                                <TouchableOpacity
+                                    onPress={() => setShowNewPassword(!showNewPassword)}
+                                    style={styles.eyeIcon}
+                                >
                                     <Ionicons name={showNewPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#999" />
                                 </TouchableOpacity>
                             </View>
                         </View>
 
+                        {/* CONFIRMAR NOVA SENHA */}
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>CONFIRMAR NOVA SENHA</Text>
-                            <View style={styles.passwordInputContainer}>
+                            <View style={styles.passwordInputWrapper}>
                                 <TextInput
-                                    style={styles.input}
+                                    style={styles.inputInner}
                                     value={confirmNewPassword}
                                     onChangeText={setConfirmNewPassword}
                                     placeholder="******"
+                                    placeholderTextColor="#CCC"
                                     secureTextEntry={!showConfirmNewPassword}
                                 />
-                                <TouchableOpacity onPress={() => setShowConfirmNewPassword(!showConfirmNewPassword)} style={styles.passwordToggleBtn}>
+                                <TouchableOpacity
+                                    onPress={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
+                                    style={styles.eyeIcon}
+                                >
                                     <Ionicons name={showConfirmNewPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#999" />
                                 </TouchableOpacity>
                             </View>
@@ -568,20 +589,15 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#FAFAFA' },
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.4)',
         justifyContent: 'flex-end',
     },
     modalContent: {
         backgroundColor: '#FFF',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        padding: 25,
-        paddingBottom: 40,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 10,
-        elevation: 5,
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
+        padding: 24,
+        paddingBottom: Platform.OS === 'ios' ? 45 : 30,
     },
     modalHeader: {
         flexDirection: 'row',
@@ -595,62 +611,65 @@ const styles = StyleSheet.create({
         color: '#333',
     },
     inputGroup: {
-        marginBottom: 20,
+        marginBottom: 18,
     },
     label: {
         fontSize: 10,
         fontWeight: '800',
-        color: '#999',
+        color: '#BBB',
         marginBottom: 8,
         letterSpacing: 1,
     },
+    // Estilo para o container que agrupa Input + Olho
+    passwordInputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F9FAFB',
+        borderWidth: 1,
+        borderColor: '#E5E7EB',
+        borderRadius: 12,
+        height: 56, // Altura fixa para evitar pulos de layout
+    },
+    // O Input em si
+    inputInner: {
+        flex: 1,
+        paddingHorizontal: 16,
+        fontSize: 16,
+        color: '#1A1A1A',
+        height: '100%',
+    },
+    // Posicionamento do ícone
+    eyeIcon: {
+        paddingHorizontal: 15,
+        height: '100%',
+        justifyContent: 'center',
+    },
+    // Input padrão para o Editar Perfil (sem olho)
     input: {
         backgroundColor: '#F9FAFB',
         borderWidth: 1,
         borderColor: '#E5E7EB',
-        borderRadius: 8,
-        padding: 15,
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        height: 56,
         fontSize: 16,
         color: '#1A1A1A',
-        flex: 1, // Permite que o TextInput ocupe o espaço restante
-        paddingRight: 50, // Espaço para o botão do toggle
-    },
-    passwordInputContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#F9FAFB',
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        borderRadius: 8,
-    },
-    passwordToggleBtn: {
-        position: 'absolute',
-        right: 15,
-        padding: 5,
     },
     saveButton: {
         backgroundColor: '#DB2777',
-        padding: 16,
-        borderRadius: 8,
+        height: 56,
+        borderRadius: 12,
         alignItems: 'center',
+        justifyContent: 'center',
         marginTop: 10,
     },
     saveButtonText: {
         color: '#FFF',
-        fontSize: 14,
-        fontWeight: 'bold',
+        fontSize: 13,
+        fontWeight: '800',
         letterSpacing: 1,
     },
-    toggleRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 15,
-    },
-    toggleText: { flex: 1, paddingRight: 10 },
-    toggleLabel: { fontSize: 16, color: '#333', fontWeight: '500' },
-    toggleDesc: { fontSize: 12, color: '#999', marginTop: 2 },
-    borderTop: { borderTopWidth: 1, borderTopColor: '#F3F4F6' },
+    // ... (restante dos estilos de Avatar e Menu)
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     scrollContent: { paddingBottom: 40 },
     profileHeader: {
@@ -737,5 +756,15 @@ const styles = StyleSheet.create({
     menuTitle: { fontSize: 15, fontWeight: '500', color: '#333' },
     menuSubtitle: { fontSize: 12, color: '#999', marginTop: 2 },
     destructiveText: { color: '#EF4444' },
-    versionText: { textAlign: 'center', color: '#CCC', fontSize: 11, letterSpacing: 1, marginTop: 10 }
+    versionText: { textAlign: 'center', color: '#CCC', fontSize: 11, letterSpacing: 1, marginTop: 10 },
+    toggleRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 15,
+    },
+    toggleText: { flex: 1, paddingRight: 10 },
+    toggleLabel: { fontSize: 16, color: '#333', fontWeight: '500' },
+    toggleDesc: { fontSize: 12, color: '#999', marginTop: 2 },
+    borderTop: { borderTopWidth: 1, borderTopColor: '#F3F4F6' }
 });

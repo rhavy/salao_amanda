@@ -38,7 +38,15 @@ const chatRoutes = require('./routes/chat');
 const financeRoutes = require('./routes/finance');
 const categoryRoutes = require('./routes/categories');
 
+// Import the auth middleware
+const authMiddleware = require('./middleware/authMiddleware'); // Import authMiddleware
+
+// Public routes (no authentication needed)
 app.use('/auth', authRoutes);
+
+// Protected routes (authentication required for all routes below this point)
+app.use(authMiddleware); // Apply authMiddleware to all subsequent routes
+
 app.use('/services', serviceRoutes);
 app.use('/appointments', appointmentRoutes);
 app.use('/user', userRoutes);
