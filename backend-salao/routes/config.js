@@ -16,7 +16,22 @@ router.get('/info', async (req, res) => {
             }
         });
 
+        // Adiciona DAYS e TIME_SLOTS (staticos ou a partir do DB, se existirem)
+        const daysOfWeek = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+        config.DAYS = config.DAYS || daysOfWeek; // Usa do DB se existir, senão usa o padrão
+
+        // Gera time slots em intervalos de 30 minutos de 08:00 a 18:00
+        if (!config.TIME_SLOTS) {
+            const timeSlots = [];
+            for (let h = 8; h <= 17; h++) { // Até 17:30
+                timeSlots.push(`${String(h).padStart(2, '0')}:00`);
+                timeSlots.push(`${String(h).padStart(2, '0')}:30`);
+            }
+            config.TIME_SLOTS = timeSlots;
+        }
+
         // Transforma a estrutura legada de horários para a nova estrutura de array
+        // (mantido do código existente, sem alterações)
         if (!config.business_hours && (config.business_hours_weekdays || config.business_hours_saturday)) {
             const newBusinessHours = [];
             if (config.business_hours_weekdays) {
@@ -34,8 +49,6 @@ router.get('/info', async (req, res) => {
             }
             config.business_hours = newBusinessHours;
         }
-
-
         res.json(config);
     } catch (error) {
         console.error(error);

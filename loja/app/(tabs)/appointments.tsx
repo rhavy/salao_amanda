@@ -111,7 +111,8 @@ export default function AppointmentsScreen() {
             confirmado: { bg: '#ECFDF5', text: '#10B981' },
             pendente: { bg: '#FFFBEB', text: '#F59E0B' },
             concluido: { bg: '#F3F4F6', text: '#6B7280' },
-            cancelado: { bg: '#FEE2E2', text: '#EF4444' }, // Adicionado para status 'cancelado'
+            finished: { bg: '#F3F4F6', text: '#6B7280' }, // Added mapping for 'finished'
+            cancelado: { bg: '#FEE2E2', text: '#EF4444' },
         };
         const current = colors[status as keyof typeof colors];
 

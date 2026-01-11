@@ -192,6 +192,7 @@ export default function AdminPanelScreen() {
         };
         const theme = statusTheme[item.status as keyof typeof statusTheme] || statusTheme.pending;
 
+
         return (
             <Animated.View
                 entering={FadeInDown.delay(index * 50)}
