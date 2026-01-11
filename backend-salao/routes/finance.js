@@ -17,7 +17,7 @@ router.get('/', async (req, res) => {
 
         // 1. Buscar agendamentos concluídos para o mês/ano
         const [monthAppointments] = await db.query(
-            "SELECT price, date FROM appointments WHERE status = 'completed' AND date LIKE ?",
+            "SELECT price, date FROM appointments WHERE status = 'finished' AND date LIKE ?",
             [datePattern]
         );
 
@@ -30,17 +30,17 @@ router.get('/', async (req, res) => {
         const currentDay = today.getDate();
         const daysInMonth = new Date(year, month, 0).getDate();
         
-        let projection = 0;
-        if (currentDay < daysInMonth) {
+        let projection = realIncome; // A projeção começa com o faturamento já realizado
+        if (currentDay > 0 && currentDay < daysInMonth) {
             const averageDailyIncome = realIncome / currentDay;
             const remainingDays = daysInMonth - currentDay;
-            projection = averageDailyIncome * remainingDays;
+            projection += averageDailyIncome * remainingDays; // Adiciona a projeção para os dias restantes
         }
 
         // 4. Calcular o totalYear (acumulado do ano)
         const yearPattern = `${year}-%`;
         const [yearAppointments] = await db.query(
-            "SELECT price FROM appointments WHERE status = 'completed' AND date LIKE ?",
+            "SELECT price FROM appointments WHERE status = 'finished' AND date LIKE ?",
             [yearPattern]
         );
         const totalYear = yearAppointments.reduce((sum, app) => sum + parseFloat(app.price), 0);

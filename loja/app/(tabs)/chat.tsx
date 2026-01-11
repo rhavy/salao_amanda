@@ -38,9 +38,12 @@ export default function ChatScreen() {
             // Ouvir novas mensagens (em tempo real)
             socket.on('new_message', (newMessage: Message) => {
                 setMessages((prev) => {
-                    // Evitar duplicatas se já adicionamos otimisticamente (pelo ID ou conteúdo/tempo)
-                    // Aqui simplifico: adiciona se ID for diferente dos existentes
-                    if (!prev.find(m => m.id === newMessage.id)) {
+                    const isDuplicate = prev.some(m => m.id === newMessage.id);
+                    if (!isDuplicate) {
+                        // Mark as read if the current user is the recipient and the message is from the admin
+                        if (newMessage.sender === 'admin') {
+                            socket.emit('mark_read', { userEmail: user.email, actor: 'user' });
+                        }
                         return [...prev, newMessage];
                     }
                     return prev;
@@ -49,8 +52,21 @@ export default function ChatScreen() {
                 setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
             });
 
+            socket.on('message_read_receipt', (data: { readerEmail: string; readByUserEmail: string; actor: string; timestamp: string }) => {
+                console.log("message_read_receipt received in user:", data);
+                // Update the UI to reflect messages being read
+                setMessages(prevMessages => 
+                    prevMessages.map(msg => 
+                        (msg.user_email === data.readByUserEmail && msg.sender === 'user' && data.actor === 'admin')
+                            ? { ...msg, is_read_by_recipient: true }
+                            : msg
+                    )
+                );
+            });
+
             return () => {
                 socket.off('new_message');
+                socket.off('message_read_receipt');
             };
         }
     }, [user, socket]);
@@ -70,6 +86,8 @@ export default function ChatScreen() {
             const data = await fetchAPI(`/chat/${user.email}`);
             setMessages(data);
             setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: false }), 200);
+            // Emite mark_read event after loading messages
+            socket.emit('mark_read', { userEmail: user.email, actor: 'user' });
         } catch (error) {
             console.error("Erro ao carregar chat", error);
         }
@@ -137,9 +155,14 @@ export default function ChatScreen() {
                                 )}
                                 <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAdmin]}>
                                     <Text style={[styles.messageText, isUser ? styles.textUser : styles.textAdmin]}>{msg.content}</Text>
-                                    <Text style={[styles.timeText, isUser ? styles.timeTextUser : styles.timeTextAdmin]}>
-                                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </Text>
+                                    <View style={styles.messageStatus}>
+                                        <Text style={[styles.timeText, isUser ? styles.timeTextUser : styles.timeTextAdmin]}>
+                                            {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </Text>
+                                        {isUser && msg.is_read_by_recipient && (
+                                            <Ionicons name="checkmark-done" size={14} color="#FFF" style={styles.readIcon} />
+                                        )}
+                                    </View>
                                 </View>
                             </View>
                         );
@@ -250,5 +273,15 @@ const styles = StyleSheet.create({
     },
     sendButtonDisabled: {
         backgroundColor: '#FBCFE8'
+    },
+    messageStatus: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        marginTop: 4,
+    },
+    readIcon: {
+        marginLeft: 5,
+        color: 'rgba(255,255,255,0.7)', // Cor do checkmark para mensagens do usuário
     }
 });

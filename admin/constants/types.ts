@@ -37,4 +37,5 @@ export interface Message {
     sender: 'user' | 'admin';
     content: string;
     created_at: string;
+    is_read_by_recipient?: boolean; // Adicionado para indicar se a mensagem foi lida pelo destinatário
 }

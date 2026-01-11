@@ -16,45 +16,90 @@ module.exports = (io) => {
         socket.on('send_message', async (data) => {
             const { email, content, sender } = data; // sender: 'user' ou 'admin'
 
+                        try {
+
+                            // 1. Salvar no banco
+
+                            const [result] = await db.query(
+
+                                'INSERT INTO messages (user_email, sender, content, is_read) VALUES (?, ?, ?, ?)',
+
+                                [email, sender || 'user', content, sender === 'admin' ? 1 : 0]
+
+                            );
+
+            
+
+                            const messageId = result.insertId; // Captura o ID gerado
+
+            
+
+                            // 2. Emitir para a sala do usuário (quem enviou também recebe se estiver ouvindo, útil para sync)
+
+                            // Se foi o usuário mandando, ele já tem a msg localmente (optimistic), mas o 'admin' precisa receber
+
+                            // Se foi 'admin' mandando, o usuário precisa receber
+
+            
+
+                            // Simplesmente emitimos 'new_message' para a sala
+
+                            io.to(email).emit('new_message', {
+
+                                id: messageId, // Usar o ID real do banco de dados
+
+                                user_email: email,
+
+                                sender: sender || 'user',
+
+                                content,
+
+                                created_at: new Date().toISOString()
+
+                            });
+
+                        } catch (error) {
+
+                            console.error("Erro no socket send_message (DB INSERT):", error);
+
+                            socket.emit('error', { message: 'Falha ao processar mensagem no DB', error: error.message });
+
+                        }
+        });
+
+        socket.on('mark_read', async ({ userEmail, actor }) => {
             try {
-                // 1. Salvar no banco
-                await db.query('INSERT INTO messages (user_email, sender, content) VALUES (?, ?, ?)', [email, sender || 'user', content]);
-
-                // 2. Emitir para a sala do usuário (quem enviou também recebe se estiver ouvindo, útil para sync)
-                // Se foi o usuário mandando, ele já tem a msg localmente (optimistic), mas o 'admin' precisa receber
-                // Se foi 'admin' mandando, o usuário precisa receber
-
-                // Simplesmente emitimos 'new_message' para a sala
-                io.to(email).emit('new_message', {
-                    id: Date.now(), // ID provisório até recarregar histórico ou usar insertId
-                    user_email: email,
-                    sender: sender || 'user',
-                    content,
-                    created_at: new Date().toISOString()
-                });
-
-                // 3. Simulação de Resposta do Admin
-                if (sender === 'user') {
-                    setTimeout(async () => {
-                        const replyContent = 'Olá! Recebemos sua mensagem via WebSocket ⚡. Em breve responderemos.';
-
-                        // Salva resposta
-                        await db.query('INSERT INTO messages (user_email, sender, content) VALUES (?, ?, ?)', [email, 'admin', replyContent]);
-
-                        // Envia resposta para a sala
-                        io.to(email).emit('new_message', {
-                            id: Date.now() + 1,
-                            user_email: email,
-                            sender: 'admin',
-                            content: replyContent,
-                            created_at: new Date().toISOString()
-                        });
-                    }, 2000); // 2 segundos
+                if (actor === 'user') {
+                    // User is marking messages from admin as read
+                    await db.query(
+                        'UPDATE messages SET is_read = 1 WHERE user_email = ? AND sender = "admin" AND is_read = 0',
+                        [userEmail]
+                    );
+                    // Emit to admin to notify messages sent to this user are read
+                    io.to('admin_room').emit('message_read_receipt', {
+                        readerEmail: userEmail,
+                        readByUserEmail: 'admin', // The messages read were sent by admin
+                        actor: 'user',
+                        timestamp: new Date().toISOString()
+                    });
+                } else if (actor === 'admin') {
+                    // Admin is marking messages from user as read
+                    await db.query(
+                        'UPDATE messages SET is_read = 1 WHERE user_email = ? AND sender = "user" AND is_read = 0',
+                        [userEmail]
+                    );
+                    // Emit to the user whose messages were read
+                    io.to(userEmail).emit('message_read_receipt', {
+                        readerEmail: 'admin', // The messages read were sent by user
+                        readByUserEmail: userEmail,
+                        actor: 'admin',
+                        timestamp: new Date().toISOString()
+                    });
                 }
-
+                console.log(`✅ Mensagens de ${userEmail} marcadas como lidas por ${actor}.`);
             } catch (error) {
-                console.error("Erro no socket send_message:", error);
-                socket.emit('error', 'Falha ao processar mensagem');
+                console.error("❌ Erro ao marcar mensagens como lidas no DB:", error);
+                socket.emit('error', { message: 'Falha ao marcar mensagens como lidas no DB', error: error.message });
             }
         });
 
